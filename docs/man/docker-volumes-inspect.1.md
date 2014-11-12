@@ -25,7 +25,11 @@ specified, the given template will be executed for each result.
 
 To get information on a volume's name:
 
-    #docker volumes inspect morose_torvalds
+```bash
+#docker volumes inspect morose_torvalds
+```
+
+```json
 {
         "ID": "124670d406cb783e37ad10d339e7f980db75460bcf4fedf1baa00566ebbcad63",
         "Name": "morose_torvalds",
@@ -42,6 +46,7 @@ To get information on a volume's name:
              "angry_bell:/bar"
         ]
 }
+```
 
 ## Getting the host path of a volume
 
