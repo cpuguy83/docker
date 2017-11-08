@@ -39,4 +39,4 @@ func (e validationError) Error() string {
 	return string(e)
 }
 
-func (e validationError) InvalidParameter() {}
+func (e validationError) InvalidArgument() {}

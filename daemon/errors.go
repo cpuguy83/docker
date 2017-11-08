@@ -5,8 +5,9 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/cpuguy83/errclass"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
 )
 
 func errNotRunning(id string) error {
@@ -80,20 +81,6 @@ func (e nameConflictError) Error() string {
 
 func (nameConflictError) Conflict() {}
 
-type validationError struct {
-	cause error
-}
-
-func (e validationError) Error() string {
-	return e.cause.Error()
-}
-
-func (e validationError) InvalidParameter() {}
-
-func (e validationError) Cause() error {
-	return e.cause
-}
-
 type notAllowedError struct {
 	cause error
 }
@@ -141,14 +128,14 @@ func (e invalidIdentifier) Error() string {
 	return fmt.Sprintf("invalid name or ID supplied: %q", string(e))
 }
 
-func (invalidIdentifier) InvalidParameter() {}
+func (invalidIdentifier) InvalidArgument() {}
 
 type duplicateMountPointError string
 
 func (e duplicateMountPointError) Error() string {
 	return "Duplicate mount point: " + string(e)
 }
-func (duplicateMountPointError) InvalidParameter() {}
+func (duplicateMountPointError) InvalidArgument() {}
 
 type containerFileNotFound struct {
 	file      string
@@ -174,36 +161,27 @@ func (e invalidFilter) Error() string {
 	return msg + "'"
 }
 
-func (e invalidFilter) InvalidParameter() {}
-
-type unknownError struct {
-	cause error
-}
-
-func (e unknownError) Error() string {
-	return e.cause.Error()
-}
-
-func (unknownError) Unknown() {}
-
-func (e unknownError) Cause() error {
-	return e.cause
-}
-
 type startInvalidConfigError string
 
 func (e startInvalidConfigError) Error() string {
 	return string(e)
 }
 
-func (e startInvalidConfigError) InvalidParameter() {} // Is this right???
+func (e startInvalidConfigError) InvalidArgument() {}
 
 func translateContainerdStartErr(cmd string, setExitCode func(int), err error) error {
-	errDesc := grpc.ErrorDesc(err)
+	var errDesc string
+	if s, ok := status.FromError(err); ok {
+		errDesc = s.Message()
+	} else {
+		errDesc = err.Error()
+	}
+	var retErr = errclass.Unknown(errors.New(errDesc))
+
 	contains := func(s1, s2 string) bool {
 		return strings.Contains(strings.ToLower(s1), s2)
 	}
-	var retErr error = unknownError{errors.New(errDesc)}
+
 	// if we receive an internal error from the initial start of a container then lets
 	// return it instead of entering the restart loop
 	// set to 127 for container cmd not found/does not exist)

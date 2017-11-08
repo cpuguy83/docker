@@ -1,13 +1,13 @@
-package errdefs
+package errclass
 
 // ErrNotFound signals that the requested object doesn't exist
 type ErrNotFound interface {
 	NotFound()
 }
 
-// ErrInvalidParameter signals that the user input is invalid
-type ErrInvalidParameter interface {
-	InvalidParameter()
+// ErrInvalidArgument signals that the user input is invalid
+type ErrInvalidArgument interface {
+	InvalidArgument()
 }
 
 // ErrConflict signals that some internal state conflicts with the requested action and can't be performed.
@@ -19,6 +19,11 @@ type ErrConflict interface {
 // ErrUnauthorized is used to signify that the user is not authorized to perform a specific action
 type ErrUnauthorized interface {
 	Unauthorized()
+}
+
+// ErrUnauthenticated is used to indicate that the caller cannot be identified.
+type ErrUnauthenticated interface {
+	Unauthenticated()
 }
 
 // ErrUnavailable signals that the requested action/subsystem is not available.
@@ -43,6 +48,11 @@ type ErrNotModified interface {
 	NotModified()
 }
 
+// ErrAlreadyExists is a special case of ErrNotModified which signals that the desired object already exists
+type ErrAlreadyExists interface {
+	AlreadyExists()
+}
+
 // ErrNotImplemented signals that the requested action/feature is not implemented on the system as configured.
 type ErrNotImplemented interface {
 	NotImplemented()
@@ -51,4 +61,24 @@ type ErrNotImplemented interface {
 // ErrUnknown signals that the kind of error that occurred is not known.
 type ErrUnknown interface {
 	Unknown()
+}
+
+// ErrCancelled signals that the action was cancelled.
+type ErrCancelled interface {
+	Cancelled()
+}
+
+// ErrDeadline signals that the deadline was reached before the action completed.
+type ErrDeadline interface {
+	DeadlineExceeded()
+}
+
+// ErrExhausted indicates that the action cannot be performed because some resource is exhausted.
+type ErrExhausted interface {
+	Exhausted()
+}
+
+// ErrDataLoss indicates that data was lost or there is data corruption.
+type ErrDataLoss interface {
+	DataLoss()
 }

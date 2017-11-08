@@ -33,7 +33,7 @@ func (e invalidFilter) Error() string {
 	return "Invalid filter: 'type'='" + string(e) + "'"
 }
 
-func (e invalidFilter) InvalidParameter() {}
+func (e invalidFilter) InvalidArgument() {}
 
 // filterNetworks filters network list according to user specified filter
 // and returns user chosen networks

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"syscall"
 
-	"github.com/docker/docker/api/errdefs"
+	"github.com/cpuguy83/errclass"
 	"github.com/docker/docker/api/server/httputils"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/backend"
@@ -88,7 +88,7 @@ func (s *containerRouter) getContainersLogs(ctx context.Context, w http.Response
 	// with the appropriate status code.
 	stdout, stderr := httputils.BoolValue(r, "stdout"), httputils.BoolValue(r, "stderr")
 	if !(stdout || stderr) {
-		return validationError{errors.New("Bad parameters: you must choose at least one stream")}
+		return errclass.InvalidArgument(errors.New("Bad parameters: you must choose at least one stream"))
 	}
 
 	containerName := vars["name"]
@@ -120,13 +120,7 @@ func (s *containerRouter) getContainersExport(ctx context.Context, w http.Respon
 	return s.backend.ContainerExport(vars["name"], w)
 }
 
-type bodyOnStartError struct{}
-
-func (bodyOnStartError) Error() string {
-	return "starting container with non-empty request body was deprecated since API v1.22 and removed in v1.24"
-}
-
-func (bodyOnStartError) InvalidParameter() {}
+var bodyOnStart = errclass.InvalidArgument(errors.New("starting container with non-empty request body was deprecated since API v1.22 and removed in v1.24"))
 
 func (s *containerRouter) postContainersStart(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	// If contentLength is -1, we can assumed chunked encoding
@@ -141,7 +135,7 @@ func (s *containerRouter) postContainersStart(ctx context.Context, w http.Respon
 	// A non-nil json object is at least 7 characters.
 	if r.ContentLength > 7 || r.ContentLength == -1 {
 		if versions.GreaterThanOrEqualTo(version, "1.24") {
-			return bodyOnStartError{}
+			return bodyOnStart
 		}
 
 		if err := httputils.CheckForJSON(r); err != nil {
@@ -203,13 +197,13 @@ func (s *containerRouter) postContainersKill(ctx context.Context, w http.Respons
 	if sigStr := r.Form.Get("signal"); sigStr != "" {
 		var err error
 		if sig, err = signal.ParseSignal(sigStr); err != nil {
-			return validationError{err}
+			return errclass.InvalidArgument(err)
 		}
 	}
 
 	if err := s.backend.ContainerKill(name, uint64(sig)); err != nil {
 		var isStopped bool
-		if errdefs.IsConflict(err) {
+		if errclass.IsConflict(err) {
 			isStopped = true
 		}
 
@@ -468,11 +462,11 @@ func (s *containerRouter) postContainersResize(ctx context.Context, w http.Respo
 
 	height, err := strconv.Atoi(r.Form.Get("h"))
 	if err != nil {
-		return validationError{err}
+		return errclass.InvalidArgument(err)
 	}
 	width, err := strconv.Atoi(r.Form.Get("w"))
 	if err != nil {
-		return validationError{err}
+		return errclass.InvalidArgument(err)
 	}
 
 	return s.backend.ContainerResize(vars["name"], height, width)
@@ -490,7 +484,7 @@ func (s *containerRouter) postContainersAttach(ctx context.Context, w http.Respo
 
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
-		return validationError{errors.Errorf("error attaching to container %s, hijack connection missing", containerName)}
+		return errclass.InvalidArgument(errors.Errorf("error attaching to container %s, hijack connection missing", containerName))
 	}
 
 	setupStreams := func() (io.ReadCloser, io.Writer, io.Writer, error) {
@@ -607,7 +601,7 @@ func (s *containerRouter) postContainersPrune(ctx context.Context, w http.Respon
 
 	pruneFilters, err := filters.FromJSON(r.Form.Get("filters"))
 	if err != nil {
-		return validationError{err}
+		return errclass.InvalidArgument(err)
 	}
 
 	pruneReport, err := s.backend.ContainersPrune(ctx, pruneFilters)

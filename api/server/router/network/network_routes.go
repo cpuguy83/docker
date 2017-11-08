@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cpuguy83/errclass"
 	"golang.org/x/net/context"
 
 	"github.com/docker/docker/api/server/httputils"
@@ -82,40 +83,16 @@ SKIP:
 	return httputils.WriteJSON(w, http.StatusOK, list)
 }
 
-type invalidRequestError struct {
-	cause error
-}
-
-func (e invalidRequestError) Error() string {
-	return e.cause.Error()
-}
-
-func (e invalidRequestError) InvalidParameter() {}
-
 type ambigousResultsError string
 
 func (e ambigousResultsError) Error() string {
 	return "network " + string(e) + " is ambiguous"
 }
 
-func (ambigousResultsError) InvalidParameter() {}
-
-type conflictError struct {
-	cause error
-}
-
-func (e conflictError) Error() string {
-	return e.cause.Error()
-}
-
-func (e conflictError) Cause() error {
-	return e.cause
-}
-
-func (e conflictError) Conflict() {}
+func (ambigousResultsError) InvalidArgument() {}
 
 func nameConflict(name string) error {
-	return conflictError{libnetwork.NetworkNameError(name)}
+	return errclass.Conflict(libnetwork.NetworkNameError(name))
 }
 
 func (n *networkRouter) getNetwork(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -130,7 +107,7 @@ func (n *networkRouter) getNetwork(ctx context.Context, w http.ResponseWriter, r
 	)
 	if v := r.URL.Query().Get("verbose"); v != "" {
 		if verbose, err = strconv.ParseBool(v); err != nil {
-			return errors.Wrapf(invalidRequestError{err}, "invalid value for verbose: %s", v)
+			return errors.Wrapf(errclass.InvalidArgument(err), "invalid value for verbose: %s", v)
 		}
 	}
 	scope := r.URL.Query().Get("scope")

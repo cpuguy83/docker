@@ -196,7 +196,7 @@ func (e invalidManifestClassError) Error() string {
 	return fmt.Sprintf("Encountered remote %q(%s) when fetching", e.mediaType, e.class)
 }
 
-func (e invalidManifestClassError) InvalidParameter() {}
+func (e invalidManifestClassError) InvalidArgument() {}
 
 type invalidManifestFormatError struct{}
 
@@ -204,7 +204,7 @@ func (invalidManifestFormatError) Error() string {
 	return "unsupported manifest format"
 }
 
-func (invalidManifestFormatError) InvalidParameter() {}
+func (invalidManifestFormatError) InvalidArgument() {}
 
 type reservedNameError string
 

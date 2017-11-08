@@ -55,7 +55,7 @@ func (e badParameterError) Error() string {
 	return "bad parameter: " + e.param + "cannot be empty"
 }
 
-func (e badParameterError) InvalidParameter() {}
+func (e badParameterError) InvalidArgument() {}
 
 // ArchiveFormValues parses form values and turns them into ArchiveOptions.
 // It fails if the archive name and path are not in the request.

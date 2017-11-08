@@ -14,7 +14,7 @@ func (e requestError) Error() string {
 	return string(e)
 }
 
-func (e requestError) InvalidParameter() {}
+func (e requestError) InvalidArgument() {}
 
 type unauthorizedError string
 

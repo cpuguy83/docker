@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/cpuguy83/errclass"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -420,5 +421,12 @@ func TestFuzzyMatch(t *testing.T) {
 		if got != match {
 			t.Fatalf("Expected %v, got %v: %s", match, got, source)
 		}
+	}
+}
+
+func TestInvalidFilter_InvalidArgument(t *testing.T) {
+	e := invalidFilter("foo")
+	if !errclass.IsInvalidArgument(e) {
+		t.Fatal(`"invalidFilter should implement errclass.InvalidArguemnt"`)
 	}
 }

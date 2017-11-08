@@ -5,8 +5,8 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/cpuguy83/errclass"
 	"github.com/docker/distribution/reference"
-	"github.com/docker/docker/api/errdefs"
 	enginetypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/swarm/runtime"
 	"github.com/docker/docker/plugin"
@@ -199,7 +199,7 @@ func (p *Controller) Wait(ctx context.Context) error {
 }
 
 func isNotFound(err error) bool {
-	return errdefs.IsNotFound(err)
+	return errclass.IsNotFound(err)
 }
 
 // Shutdown is the shutdown phase from swarmkit

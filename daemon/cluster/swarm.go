@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cpuguy83/errclass"
 	apitypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	types "github.com/docker/docker/api/types/swarm"
@@ -44,7 +45,7 @@ func (c *Cluster) Init(req types.InitRequest) (string, error) {
 	}
 
 	if err := validateAndSanitizeInitRequest(&req); err != nil {
-		return "", validationError{err}
+		return "", errclass.InvalidArgument(err)
 	}
 
 	listenHost, listenPort, err := resolveListenAddr(req.ListenAddr)
@@ -140,7 +141,7 @@ func (c *Cluster) Join(req types.JoinRequest) error {
 	c.mu.Unlock()
 
 	if err := validateAndSanitizeJoinRequest(&req); err != nil {
-		return validationError{err}
+		return errclass.InvalidArgument(err)
 	}
 
 	listenHost, listenPort, err := resolveListenAddr(req.ListenAddr)
@@ -233,7 +234,7 @@ func (c *Cluster) Update(version uint64, spec types.Spec, flags types.UpdateFlag
 		// will be used to swarmkit.
 		clusterSpec, err := convert.SwarmSpecToGRPC(spec)
 		if err != nil {
-			return convertError{err}
+			return errclass.InvalidArgument(err)
 		}
 
 		_, err = state.controlClient.UpdateCluster(
@@ -304,7 +305,7 @@ func (c *Cluster) UnlockSwarm(req types.UnlockRequest) error {
 
 	key, err := encryption.ParseHumanReadableKey(req.UnlockKey)
 	if err != nil {
-		return validationError{err}
+		return errclass.InvalidArgument(err)
 	}
 
 	config := nr.config

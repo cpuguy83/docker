@@ -38,7 +38,7 @@ func (e versionUnsupportedError) Error() string {
 	return fmt.Sprintf("client version %s is too new. Maximum supported API version is %s", e.version, e.maxVersion)
 }
 
-func (e versionUnsupportedError) InvalidParameter() {}
+func (e versionUnsupportedError) InvalidArgument() {}
 
 // WrapHandler returns a new handler function wrapping the previous one in the request chain.
 func (v VersionMiddleware) WrapHandler(handler func(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error) func(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {

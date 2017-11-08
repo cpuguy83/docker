@@ -6,19 +6,15 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/cpuguy83/errclass"
 	"github.com/docker/docker/api/server/httputils"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/versions"
+	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
 
-type pathError struct{}
-
-func (pathError) Error() string {
-	return "Path cannot be empty"
-}
-
-func (pathError) InvalidParameter() {}
+var pathError = errclass.InvalidArgument(errors.New("Path cannot be empty"))
 
 // postContainersCopy is deprecated in favor of getContainersArchive.
 func (s *containerRouter) postContainersCopy(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -38,7 +34,7 @@ func (s *containerRouter) postContainersCopy(ctx context.Context, w http.Respons
 	}
 
 	if cfg.Resource == "" {
-		return pathError{}
+		return pathError
 	}
 
 	data, err := s.backend.ContainerCopy(vars["name"], cfg.Resource)

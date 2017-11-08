@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/cpuguy83/errclass"
 	"github.com/docker/docker/api/server/httputils"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/versions"
 	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
@@ -24,13 +26,7 @@ func (s *containerRouter) getExecByID(ctx context.Context, w http.ResponseWriter
 	return httputils.WriteJSON(w, http.StatusOK, eConfig)
 }
 
-type execCommandError struct{}
-
-func (execCommandError) Error() string {
-	return "No exec command specified"
-}
-
-func (execCommandError) InvalidParameter() {}
+var execCommandError = errclass.InvalidArgument(errors.New("No exec command specified"))
 
 func (s *containerRouter) postContainerExecCreate(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if err := httputils.ParseForm(r); err != nil {
@@ -47,7 +43,7 @@ func (s *containerRouter) postContainerExecCreate(ctx context.Context, w http.Re
 	}
 
 	if len(execConfig.Cmd) == 0 {
-		return execCommandError{}
+		return execCommandError
 	}
 
 	// Register an instance of Exec in container.

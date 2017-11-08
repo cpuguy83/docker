@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/cpuguy83/errclass"
 	"golang.org/x/net/context"
 
 	"github.com/docker/distribution/reference"
@@ -117,12 +118,12 @@ func (s *DefaultService) Auth(ctx context.Context, authConfig *types.AuthConfig,
 	}
 	u, err := url.Parse(serverAddress)
 	if err != nil {
-		return "", "", validationError{errors.Errorf("unable to parse server address: %v", err)}
+		return "", "", errclass.InvalidArgument(errors.Errorf("unable to parse server address: %v", err))
 	}
 
 	endpoints, err := s.LookupPushEndpoints(u.Host)
 	if err != nil {
-		return "", "", validationError{err}
+		return "", "", errclass.InvalidArgument(err)
 	}
 
 	for _, endpoint := range endpoints {

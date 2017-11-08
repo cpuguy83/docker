@@ -295,7 +295,7 @@ func (e invalidFilter) Error() string {
 	return "Invalid filter '" + string(e) + "'"
 }
 
-func (invalidFilter) InvalidParameter() {}
+func (invalidFilter) InvalidArgument() {}
 
 // Validate compared the set of accepted keys against the keys in the mapping.
 // An error is returned if any mapping keys are not in the accepted set.
