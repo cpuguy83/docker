@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"sync"
 	"testing"
 )
 
@@ -29,6 +30,7 @@ type HTTPEventCollectorMock struct {
 	tcpAddr     *net.TCPAddr
 	tcpListener *net.TCPListener
 
+	mu                  sync.Mutex
 	token               string
 	simulateServerError bool
 
@@ -55,6 +57,12 @@ func NewHTTPEventCollectorMock(t *testing.T) *HTTPEventCollectorMock {
 		connectionVerified:  false}
 }
 
+func (hec *HTTPEventCollectorMock) simulateErr(b bool) {
+	hec.mu.Lock()
+	hec.simulateServerError = b
+	hec.mu.Unlock()
+}
+
 func (hec *HTTPEventCollectorMock) URL() string {
 	return "http://" + hec.tcpListener.Addr().String()
 }
@@ -72,7 +80,11 @@ func (hec *HTTPEventCollectorMock) ServeHTTP(writer http.ResponseWriter, request
 
 	hec.numOfRequests++
 
-	if hec.simulateServerError {
+	hec.mu.Lock()
+	simErr := hec.simulateServerError
+	hec.mu.Unlock()
+
+	if simErr {
 		if request.Body != nil {
 			defer request.Body.Close()
 		}

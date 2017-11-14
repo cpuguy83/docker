@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -88,10 +89,11 @@ type splunkLogger struct {
 	// For synchronization between background worker and logger.
 	// We use channel to send messages to worker go routine.
 	// All other variables for blocking Close call before we flush all messages to HEC
-	stream     chan *splunkMessage
-	lock       sync.RWMutex
-	closed     bool
-	closedCond *sync.Cond
+	lock   sync.Mutex
+	stream chan *splunkMessage
+	closed chan struct{}
+
+	workerWait sync.WaitGroup
 }
 
 type splunkLoggerInline struct {
@@ -261,6 +263,7 @@ func New(info logger.Info) (logger.Logger, error) {
 		postMessagesFrequency: postMessagesFrequency,
 		postMessagesBatchSize: postMessagesBatchSize,
 		bufferMaximum:         bufferMaximum,
+		closed:                make(chan struct{}),
 	}
 
 	// By default we verify connection, but we allow use to skip that
@@ -328,9 +331,32 @@ func New(info logger.Info) (logger.Logger, error) {
 		return nil, fmt.Errorf("Unexpected format %s", splunkFormat)
 	}
 
+	logger.workerWait.Add(1)
 	go loggerWrapper.worker()
 
 	return loggerWrapper, nil
+}
+
+var errClosed = errors.New("closed")
+
+func (l *splunkLogger) queueMessage(msg *splunkMessage) error {
+	// Since the message stream can be buffered, and select is non-deterministic,
+	// check the closed channel first by itself, and then again try to send on the
+	// stream.
+	// In the real world this shouldn't ever be a problem, but unit tests are
+	// enforcing a more deterministic behavior.
+	select {
+	case <-l.closed:
+		return errClosed
+	default:
+	}
+
+	select {
+	case <-l.closed:
+		return errClosed
+	case l.stream <- msg:
+	}
+	return nil
 }
 
 func (l *splunkLoggerInline) Log(msg *logger.Message) error {
@@ -342,7 +368,8 @@ func (l *splunkLoggerInline) Log(msg *logger.Message) error {
 
 	message.Event = &event
 	logger.PutMessage(msg)
-	return l.queueMessageAsync(message)
+
+	return l.queueMessage(message)
 }
 
 func (l *splunkLoggerJSON) Log(msg *logger.Message) error {
@@ -360,7 +387,7 @@ func (l *splunkLoggerJSON) Log(msg *logger.Message) error {
 
 	message.Event = &event
 	logger.PutMessage(msg)
-	return l.queueMessageAsync(message)
+	return l.queueMessage(message)
 }
 
 func (l *splunkLoggerRaw) Log(msg *logger.Message) error {
@@ -373,43 +400,42 @@ func (l *splunkLoggerRaw) Log(msg *logger.Message) error {
 
 	message.Event = string(append(l.prefix, msg.Line...))
 	logger.PutMessage(msg)
-	return l.queueMessageAsync(message)
-}
-
-func (l *splunkLogger) queueMessageAsync(message *splunkMessage) error {
-	l.lock.RLock()
-	defer l.lock.RUnlock()
-	if l.closedCond != nil {
-		return fmt.Errorf("%s: driver is closed", driverName)
-	}
-	l.stream <- message
-	return nil
+	return l.queueMessage(message)
 }
 
 func (l *splunkLogger) worker() {
+	defer l.workerWait.Done()
+
 	timer := time.NewTicker(l.postMessagesFrequency)
 	var messages []*splunkMessage
+
+	handleMessage := func(message *splunkMessage, closed bool) {
+		messages = append(messages, message)
+		// Only sending when we get exactly to the batch size,
+		// This also helps not to fire postMessages on every new message,
+		// when previous try failed.
+		if len(messages)%l.postMessagesBatchSize == 0 {
+			messages = l.postMessages(messages, closed)
+		}
+	}
 	for {
 		select {
-		case message, open := <-l.stream:
-			if !open {
-				l.postMessages(messages, true)
-				l.lock.Lock()
-				defer l.lock.Unlock()
-				l.transport.CloseIdleConnections()
-				l.closed = true
-				l.closedCond.Signal()
-				return
-			}
-			messages = append(messages, message)
-			// Only sending when we get exactly to the batch size,
-			// This also helps not to fire postMessages on every new message,
-			// when previous try failed.
-			if len(messages)%l.postMessagesBatchSize == 0 {
-				messages = l.postMessages(messages, false)
-			}
 		case <-timer.C:
 			messages = l.postMessages(messages, false)
+		case message := <-l.stream:
+			handleMessage(message, false)
+		case <-l.closed:
+			// l.stream is intentionally not closed in order to reduce the amount of
+			// locking required.  Since this is the only goroutine reading off of
+			// the channel, checking the length here ought to be enough to prevent
+			// getting stuck on receieve.
+			for len(l.stream) > 0 {
+				handleMessage(<-l.stream, false)
+			}
+			l.postMessages(messages, true)
+
+			l.transport.CloseIdleConnections()
+			return
 		}
 	}
 }
@@ -510,14 +536,14 @@ func (l *splunkLogger) tryPostMessages(messages []*splunkMessage) error {
 
 func (l *splunkLogger) Close() error {
 	l.lock.Lock()
-	defer l.lock.Unlock()
-	if l.closedCond == nil {
-		l.closedCond = sync.NewCond(&l.lock)
-		close(l.stream)
-		for !l.closed {
-			l.closedCond.Wait()
-		}
+	select {
+	case <-l.closed:
+	default:
+		close(l.closed)
 	}
+	l.lock.Unlock()
+
+	l.workerWait.Wait()
 	return nil
 }
 

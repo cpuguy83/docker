@@ -1062,7 +1062,7 @@ func TestSkipVerify(t *testing.T) {
 		t.Fatal("No messages should be accepted at this point")
 	}
 
-	hec.simulateServerError = false
+	hec.simulateErr(false)
 
 	for i := defaultStreamChannelSize * 2; i < defaultStreamChannelSize*4; i++ {
 		if err := loggerDriver.Log(&logger.Message{Line: []byte(fmt.Sprintf("%d", i)), Source: "stdout", Timestamp: time.Now()}); err != nil {
@@ -1110,7 +1110,7 @@ func TestBufferMaximum(t *testing.T) {
 	}
 
 	hec := NewHTTPEventCollectorMock(t)
-	hec.simulateServerError = true
+	hec.simulateErr(true)
 	go hec.Serve()
 
 	info := logger.Info{
