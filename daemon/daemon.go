@@ -125,6 +125,7 @@ type Daemon struct {
 	startupDone      chan struct{}
 
 	attachmentStore network.AttachmentStore
+	mountRegister   *mountRegister
 }
 
 // StoreHosts stores the addresses the daemon is listening on
@@ -890,6 +891,7 @@ func NewDaemon(config *config.Config, registryService registry.Service, containe
 	d.seccompEnabled = sysInfo.Seccomp
 	d.apparmorEnabled = sysInfo.AppArmor
 	d.containerdRemote = containerdRemote
+	d.mountRegister = &mountRegister{}
 
 	d.linkIndex = newLinkIndex()
 

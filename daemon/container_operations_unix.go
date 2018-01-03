@@ -133,19 +133,19 @@ func (daemon *Daemon) setupIpcDirs(c *container.Container) error {
 	case ipcMode.IsShareable():
 		rootIDs := daemon.idMappings.RootPair()
 		if !c.HasMountFor("/dev/shm") {
-			shmPath, err := c.ShmResourcePath()
-			if err != nil {
-				return err
-			}
-
-			if err := idtools.MkdirAllAndChown(shmPath, 0700, rootIDs); err != nil {
-				return err
-			}
-
 			shmproperty := "mode=1777,size=" + strconv.FormatInt(c.HostConfig.ShmSize, 10)
-			if err := unix.Mount("shm", shmPath, "tmpfs", uintptr(unix.MS_NOEXEC|unix.MS_NOSUID|unix.MS_NODEV), label.FormatMountLabel(shmproperty, c.GetMountLabel())); err != nil {
-				return fmt.Errorf("mounting shm tmpfs: %s", err)
+			mountFn := func(p string) error {
+				if err := idtools.MkdirAllAndChown(p, 0700, rootIDs); err != nil {
+					return err
+				}
+				return unix.Mount("hsm", p, "tmpfs", uintptr(unix.MS_NOEXEC|unix.MS_NOSUID|unix.MS_NODEV), label.FormatMountLabel(shmproperty, c.GetMountLabel()))
 			}
+
+			shmPath, err := daemon.mountRegister.Get(c.ID, "shm", mountFn)
+			if err != nil {
+				return errors.Wrap(err, "error getting shm mount")
+			}
+
 			if err := os.Chown(shmPath, rootIDs.UID, rootIDs.GID); err != nil {
 				return err
 			}
