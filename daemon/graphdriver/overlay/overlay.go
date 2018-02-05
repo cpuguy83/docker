@@ -21,7 +21,6 @@ import (
 	"github.com/docker/docker/pkg/fsutils"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/locker"
-	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/system"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/sirupsen/logrus"
@@ -240,11 +239,9 @@ func (d *Driver) GetMetadata(id string) (map[string]string, error) {
 	return metadata, nil
 }
 
-// Cleanup any state created by overlay which should be cleaned when daemon
-// is being shutdown. For now, we just have to unmount the bind mounted
-// we had created.
+// Cleanup is a no-op for overlay
 func (d *Driver) Cleanup() error {
-	return mount.RecursiveUnmount(d.home)
+	return nil
 }
 
 // CreateReadWrite creates a layer that is writable for use as a container

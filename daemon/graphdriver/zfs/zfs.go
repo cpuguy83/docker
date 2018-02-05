@@ -178,9 +178,9 @@ func (d *Driver) String() string {
 	return "zfs"
 }
 
-// Cleanup is called on daemon shutdown, it is used to clean up any remaining mounts
+// Cleanup is a no-op on zfs
 func (d *Driver) Cleanup() error {
-	return mount.RecursiveUnmount(d.options.mountPath)
+	return nil
 }
 
 // Status returns information about the ZFS filesystem. It returns a two dimensional array of information

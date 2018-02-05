@@ -16,7 +16,6 @@ import (
 	"github.com/docker/docker/pkg/devicemapper"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/locker"
-	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/system"
 	units "github.com/docker/go-units"
 )
@@ -121,13 +120,7 @@ func (d *Driver) GetMetadata(id string) (map[string]string, error) {
 
 // Cleanup unmounts a device.
 func (d *Driver) Cleanup() error {
-	err := d.DeviceSet.Shutdown(d.home)
-
-	if err2 := mount.RecursiveUnmount(d.home); err == nil {
-		err = err2
-	}
-
-	return err
+	return d.DeviceSet.Shutdown(d.home)
 }
 
 // CreateReadWrite creates a layer that is writable for use as a container

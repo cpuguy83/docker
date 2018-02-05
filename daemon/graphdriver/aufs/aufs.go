@@ -42,7 +42,6 @@ import (
 	"github.com/docker/docker/pkg/directory"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/locker"
-	mountpk "github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/system"
 	rsystem "github.com/opencontainers/runc/libcontainer/system"
 	"github.com/opencontainers/selinux/go-selinux/label"
@@ -603,7 +602,7 @@ func (a *Driver) Cleanup() error {
 			logrus.Debugf("aufs error unmounting %s: %s", m, err)
 		}
 	}
-	return mountpk.RecursiveUnmount(a.root)
+	return nil
 }
 
 func (a *Driver) aufsMount(ro []string, rw, target, mountLabel string) (err error) {

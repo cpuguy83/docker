@@ -29,7 +29,6 @@ import (
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/pkg/containerfs"
 	"github.com/docker/docker/pkg/idtools"
-	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/pkg/system"
 	"github.com/docker/go-units"
@@ -157,13 +156,9 @@ func (d *Driver) GetMetadata(id string) (map[string]string, error) {
 	return nil, nil
 }
 
-// Cleanup unmounts the home directory.
+// Cleanup cleans up the btrfs quota.
 func (d *Driver) Cleanup() error {
-	if err := d.subvolDisableQuota(); err != nil {
-		return err
-	}
-
-	return mount.RecursiveUnmount(d.home)
+	return d.subvolDisableQuota()
 }
 
 func free(p *C.char) {
