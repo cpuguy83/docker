@@ -66,15 +66,6 @@ func (c *container) getTask() containerd.Task {
 	return t
 }
 
-func (c *container) addProcess(id string, p containerd.Process) {
-	c.mu.Lock()
-	if c.execs == nil {
-		c.execs = make(map[string]containerd.Process)
-	}
-	c.execs[id] = p
-	c.mu.Unlock()
-}
-
 func (c *container) deleteProcess(id string) {
 	c.mu.Lock()
 	delete(c.execs, id)
@@ -338,12 +329,14 @@ func (c *client) Exec(ctx context.Context, containerID, processID string, spec *
 	if ctr == nil {
 		return -1, errors.WithStack(newNotFoundError("no such container"))
 	}
-	t := ctr.getTask()
-	if t == nil {
+
+	ctr.mu.Lock()
+	defer ctr.mu.Unlock()
+	if ctr.task == nil {
 		return -1, errors.WithStack(newInvalidParameterError("container is not running"))
 	}
 
-	if p := ctr.getProcess(processID); p != nil {
+	if p := ctr.execs[processID]; p != nil {
 		return -1, errors.WithStack(newConflictError("id already in use"))
 	}
 
@@ -365,7 +358,7 @@ func (c *client) Exec(ctx context.Context, containerID, processID string, spec *
 		}
 	}()
 
-	p, err = t.Exec(ctx, processID, spec, func(id string) (cio.IO, error) {
+	p, err = ctr.task.Exec(ctx, processID, spec, func(id string) (cio.IO, error) {
 		rio, err = c.createIO(fifos, containerID, processID, stdinCloseSync, attachStdio)
 		return rio, err
 	})
@@ -374,14 +367,17 @@ func (c *client) Exec(ctx context.Context, containerID, processID string, spec *
 		return -1, wrapError(err)
 	}
 
-	ctr.addProcess(processID, p)
+	if ctr.execs == nil {
+		ctr.execs = make(map[string]containerd.Process)
+	}
+	ctr.execs[processID] = p
 
 	// Signal c.createIO that it can call CloseIO
 	close(stdinCloseSync)
 
 	if err = p.Start(ctx); err != nil {
 		p.Delete(context.Background())
-		ctr.deleteProcess(processID)
+		delete(ctr.execs, processID)
 		return -1, wrapError(err)
 	}
 
@@ -697,7 +693,10 @@ func (c *client) processEvent(ctr *container, et EventType, ei EventInfo) {
 		}
 
 		if et == EventExit && ei.ProcessID != ei.ContainerID {
-			p := ctr.getProcess(ei.ProcessID)
+			ctr.mu.Lock()
+			defer ctr.mu.Unlock()
+
+			p := ctr.execs[ei.ProcessID]
 			if p == nil {
 				c.logger.WithError(errors.New("no such process")).
 					WithFields(logrus.Fields{
@@ -713,16 +712,9 @@ func (c *client) processEvent(ctr *container, et EventType, ei EventInfo) {
 					"process":   ei.ProcessID,
 				}).Warn("failed to delete process")
 			}
-			ctr.deleteProcess(ei.ProcessID)
 
-			ctr := c.getContainer(ei.ContainerID)
-			if ctr == nil {
-				c.logger.WithFields(logrus.Fields{
-					"container": ei.ContainerID,
-				}).Error("failed to find container")
-			} else {
-				newFIFOSet(ctr.bundleDir, ei.ProcessID, true, false).Close()
-			}
+			delete(ctr.execs, ei.ProcessID)
+			newFIFOSet(ctr.bundleDir, ei.ProcessID, true, false).Close()
 		}
 	})
 }
