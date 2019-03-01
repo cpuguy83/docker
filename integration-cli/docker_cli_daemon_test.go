@@ -18,7 +18,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -548,26 +547,6 @@ func (s *DockerDaemonSuite) TestDaemonAllocatesListeningPort(c *check.C) {
 		} else if !strings.Contains(output, "port is already allocated") {
 			c.Fatalf("Expected port is already allocated error: %q", output)
 		}
-	}
-}
-
-func (s *DockerDaemonSuite) TestDaemonUUIDGeneration(c *check.C) {
-	dir := "/var/lib/docker"
-	if runtime.GOOS == "windows" {
-		dir = filepath.Join(os.Getenv("programdata"), "docker")
-	}
-	file := filepath.Join(dir, "engine_uuid")
-	os.Remove(file)
-	s.d.Start(c)
-	s.d.Stop(c)
-
-	fi, err := os.Stat(file)
-	if err != nil {
-		c.Fatalf("Error opening uuid file")
-	}
-	// Test for uuid length
-	if fi.Size() != 36 {
-		c.Fatalf("Bad UUID size %d", fi.Size())
 	}
 }
 
