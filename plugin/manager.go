@@ -1,6 +1,7 @@
 package plugin // import "github.com/docker/docker/plugin"
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/containerd/containerd"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/image"
@@ -21,7 +23,7 @@ import (
 	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/pubsub"
 	"github.com/docker/docker/pkg/system"
-	"github.com/docker/docker/plugin/v2"
+	v2 "github.com/docker/docker/plugin/v2"
 	"github.com/docker/docker/registry"
 	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -61,6 +63,7 @@ type ManagerConfig struct {
 	ExecRoot           string
 	CreateExecutor     ExecutorCreator
 	AuthzMiddleware    *authorization.Middleware
+	ContainerdClient   *containerd.Client
 }
 
 // ExecutorCreator is used in the manager config to pass in an `Executor`
@@ -72,7 +75,7 @@ type Manager struct {
 	mu        sync.RWMutex // protects cMap
 	muGC      sync.RWMutex // protects blobstore deletions
 	cMap      map[*v2.Plugin]*controller
-	blobStore *basicBlobStore
+	blobStore blobstore
 	publisher *pubsub.Publisher
 	executor  Executor
 }
@@ -117,9 +120,13 @@ func NewManager(config ManagerConfig) (*Manager, error) {
 		return nil, err
 	}
 
-	manager.blobStore, err = newBasicBlobStore(filepath.Join(manager.config.Root, "storage/blobs"))
-	if err != nil {
-		return nil, err
+	if config.ContainerdClient != nil {
+		manager.blobStore = &containerdBlobStore{config.ContainerdClient.ContentStore()}
+	} else {
+		manager.blobStore, err = newBasicBlobStore(filepath.Join(manager.config.Root, "storage/blobs"))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	manager.cMap = make(map[*v2.Plugin]*controller)
@@ -294,6 +301,8 @@ func (pm *Manager) save(p *v2.Plugin) error {
 
 // GC cleans up unreferenced blobs. This is recommended to run in a goroutine
 func (pm *Manager) GC() {
+	ctx := context.TODO()
+
 	pm.muGC.Lock()
 	defer pm.muGC.Unlock()
 
@@ -305,7 +314,15 @@ func (pm *Manager) GC() {
 		}
 	}
 
-	pm.blobStore.gc(whitelist)
+	pm.blobStore.Walk(ctx, func(dgst digest.Digest) error {
+		if _, ok := whitelist[dgst]; ok {
+			return nil
+		}
+		if err := pm.blobStore.Delete(ctx, dgst); err != nil {
+			logrus.WithError(err).WithField("module", "plugins").WithField("digest", dgst).Error("Error removing plugin layer blob")
+		}
+		return nil
+	})
 }
 
 type logHook struct{ id string }

@@ -895,18 +895,17 @@ func NewDaemon(ctx context.Context, config *config.Config, pluginStore *plugin.S
 		}
 	}
 
-	createPluginExec := func(m *plugin.Manager) (plugin.Executor, error) {
-		var pluginCli *containerd.Client
-
-		// Windows is not currently using containerd, keep the
-		// client as nil
-		if config.ContainerdAddr != "" {
-			pluginCli, err = containerd.New(config.ContainerdAddr, containerd.WithDefaultNamespace(config.ContainerdPluginNamespace), containerd.WithDialOpts(gopts), containerd.WithTimeout(60*time.Second))
-			if err != nil {
-				return nil, errors.Wrapf(err, "failed to dial %q", config.ContainerdAddr)
-			}
+	// Windows is not currently using containerd, keep the
+	// client as nil
+	var pluginCli *containerd.Client
+	if config.ContainerdAddr != "" {
+		pluginCli, err = containerd.New(config.ContainerdAddr, containerd.WithDefaultNamespace(config.ContainerdPluginNamespace), containerd.WithDialOpts(gopts), containerd.WithTimeout(60*time.Second))
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to dial %q", config.ContainerdAddr)
 		}
+	}
 
+	createPluginExec := func(m *plugin.Manager) (plugin.Executor, error) {
 		return pluginexec.New(ctx, getPluginExecRoot(config.Root), pluginCli, config.ContainerdPluginNamespace, m)
 	}
 
@@ -920,6 +919,7 @@ func NewDaemon(ctx context.Context, config *config.Config, pluginStore *plugin.S
 		LiveRestoreEnabled: config.LiveRestoreEnabled,
 		LogPluginEvent:     d.LogPluginEvent, // todo: make private
 		AuthzMiddleware:    config.AuthzMiddleware,
+		ContainerdClient:   pluginCli,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "couldn't create plugin manager")

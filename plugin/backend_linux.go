@@ -31,7 +31,7 @@ import (
 	"github.com/docker/docker/pkg/pools"
 	"github.com/docker/docker/pkg/progress"
 	"github.com/docker/docker/pkg/system"
-	"github.com/docker/docker/plugin/v2"
+	v2 "github.com/docker/docker/plugin/v2"
 	refstore "github.com/docker/docker/reference"
 	"github.com/opencontainers/go-digest"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -532,7 +532,7 @@ func (s *pluginConfigStore) Get(d digest.Digest) ([]byte, error) {
 	if s.plugin.Config != d {
 		return nil, errors.New("plugin not found")
 	}
-	rwc, err := s.pm.blobStore.Get(d)
+	rwc, err := s.pm.blobStore.Get(context.TODO(), d)
 	if err != nil {
 		return nil, err
 	}
@@ -598,11 +598,11 @@ func (l *pluginLayer) Parent() distribution.PushLayer {
 }
 
 func (l *pluginLayer) Open() (io.ReadCloser, error) {
-	return l.pm.blobStore.Get(l.blobs[len(l.diffIDs)-1])
+	return l.pm.blobStore.Get(context.TODO(), l.blobs[len(l.diffIDs)-1])
 }
 
 func (l *pluginLayer) Size() (int64, error) {
-	return l.pm.blobStore.Size(l.blobs[len(l.diffIDs)-1])
+	return l.pm.blobStore.Size(context.TODO(), l.blobs[len(l.diffIDs)-1])
 }
 
 func (l *pluginLayer) MediaType() string {
@@ -700,7 +700,7 @@ func (pm *Manager) CreateFromContext(ctx context.Context, tarCtx io.ReadCloser, 
 	var configJSON []byte
 	rootFS := splitConfigRootFSFromTar(tarCtx, &configJSON)
 
-	rootFSBlob, err := pm.blobStore.New()
+	rootFSBlob, err := pm.blobStore.New(ctx, specs.Descriptor{})
 	if err != nil {
 		return err
 	}
@@ -736,7 +736,7 @@ func (pm *Manager) CreateFromContext(ctx context.Context, tarCtx io.ReadCloser, 
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 
-	rootFSBlobsum, err := rootFSBlob.Commit()
+	rootFSBlobsum, err := rootFSBlob.Commit(ctx)
 	if err != nil {
 		return err
 	}
@@ -753,7 +753,7 @@ func (pm *Manager) CreateFromContext(ctx context.Context, tarCtx io.ReadCloser, 
 
 	config.DockerVersion = dockerversion.Version
 
-	configBlob, err := pm.blobStore.New()
+	configBlob, err := pm.blobStore.New(ctx, specs.Descriptor{})
 	if err != nil {
 		return err
 	}
@@ -761,7 +761,7 @@ func (pm *Manager) CreateFromContext(ctx context.Context, tarCtx io.ReadCloser, 
 	if err := json.NewEncoder(configBlob).Encode(config); err != nil {
 		return errors.Wrap(err, "error encoding json config")
 	}
-	configBlobsum, err := configBlob.Commit()
+	configBlobsum, err := configBlob.Commit(ctx)
 	if err != nil {
 		return err
 	}
