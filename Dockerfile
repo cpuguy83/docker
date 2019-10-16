@@ -317,17 +317,29 @@ COPY . /go/src/github.com/docker/docker
 
 FROM src AS build-binary
 ARG DOCKER_GITCOMMIT=HEAD
+ARG VERSION
+ARG PLATFORM
+ARG PRODUCT
+ARG DEFAULT_PRODUCT_LICENSE
 RUN --mount=type=cache,target=/root/.cache/go-build \
         hack/make.sh binary
 
 FROM src AS build-dynbinary
 ARG DOCKER_GITCOMMIT=HEAD
+ARG VERSION
+ARG PLATFORM
+ARG PRODUCT
+ARG DEFAULT_PRODUCT_LICENSE
 RUN --mount=type=cache,target=/root/.cache/go-build \
         hack/make.sh dynbinary
 
 FROM src AS build-cross
 ARG DOCKER_GITCOMMIT=HEAD
 ARG DOCKER_CROSSPLATFORMS=""
+ARG VERSION
+ARG PLATFORM
+ARG PRODUCT
+ARG DEFAULT_PRODUCT_LICENSE
 RUN --mount=type=cache,target=/root/.cache/go-build \
         hack/make.sh cross
 
