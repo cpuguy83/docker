@@ -112,6 +112,7 @@ RUN --mount=type=cache,sharing=locked,id=moby-cross-false-aptlib,target=/var/lib
     --mount=type=cache,sharing=locked,id=moby-cross-false-aptcache,target=/var/cache/apt \
         apt-get update && apt-get install -y --no-install-recommends \
             libapparmor-dev \
+            libdevmapper-dev \
             libseccomp-dev
 
 FROM --platform=linux/amd64 cross-true AS runtime-dev-cross-true
@@ -312,44 +313,64 @@ VOLUME /var/lib/docker
 # Wrap all commands in the "docker-in-docker" script to allow nested containers
 ENTRYPOINT ["hack/dind"]
 
-FROM dev AS src
-COPY . /go/src/github.com/docker/docker
+# TODO: This is here because hack/make.sh binary copies these extras binaries
+# from $PATH into the bundles dir.
+# It would be nice to handle this in a different way.
+FROM runtime-dev-cross-false AS runtime-dev-extras
+COPY --from=tini /build/ /usr/local/bin/
+COPY --from=runc /build/ /usr/local/bin/
+COPY --from=containerd /build/ /usr/local/bin/
+COPY --from=rootlesskit /build/ /usr/local/bin/
+COPY --from=proxy /build/ /usr/local/bin/
 
-FROM src AS build-binary
+FROM runtime-dev-extras AS build-binary
 ARG DOCKER_GITCOMMIT=HEAD
 ARG VERSION
 ARG PLATFORM
 ARG PRODUCT
 ARG DEFAULT_PRODUCT_LICENSE
+WORKDIR /go/src/github.com/docker/docker
 RUN --mount=type=cache,target=/root/.cache/go-build \
-        hack/make.sh binary
+    --mount=type=bind,target=/go/src/github.com/docker/docker \
+        PREFIX=/build hack/make.sh binary
 
-FROM src AS build-dynbinary
+FROM runtime-dev-extras AS build-dynbinary
 ARG DOCKER_GITCOMMIT=HEAD
 ARG VERSION
 ARG PLATFORM
 ARG PRODUCT
 ARG DEFAULT_PRODUCT_LICENSE
+WORKDIR /go/src/github.com/docker/docker
 RUN --mount=type=cache,target=/root/.cache/go-build \
-        hack/make.sh dynbinary
+    --mount=type=bind,from=src,target=/go/src/github.com/docker/docker \
+        PREFIX=/build hack/make.sh dynbinary
 
-FROM src AS build-cross
+FROM runtime-dev-cross-true AS build-cross
+COPY --from=tini /build/ /usr/local/bin/
+COPY --from=runc /build/ /usr/local/bin/
+COPY --from=containerd /build/ /usr/local/bin/
+COPY --from=rootlesskit /build/ /usr/local/bin/
+COPY --from=proxy /build/ /usr/local/bin/
 ARG DOCKER_GITCOMMIT=HEAD
 ARG DOCKER_CROSSPLATFORMS=""
 ARG VERSION
 ARG PLATFORM
 ARG PRODUCT
 ARG DEFAULT_PRODUCT_LICENSE
+WORKDIR /go/src/github.com/docker/docker
 RUN --mount=type=cache,target=/root/.cache/go-build \
-        hack/make.sh cross
+    --mount=type=bind,from=src,target=/go/src/github.com/docker/docker \
+        PREFIX=/build hack/make.sh cross
 
 FROM scratch AS binary
-COPY --from=build-binary /go/src/github.com/docker/docker/bundles/ /
+COPY --from=build-binary /build/bundles/ /
 
-FROM scratch AS dynbinary
+FROM as AS dynbinary
 COPY --from=build-dynbinary /go/src/github.com/docker/docker/bundles/ /
 
 FROM scratch AS cross
 COPY --from=build-cross /go/src/github.com/docker/docker/bundles/ /
 
-FROM src AS final
+FROM dev AS final
+COPY --from=source /go/src/github.com/docker/docker /go/src/github.com/docker/docker
+WORKDIR /go/src/github.com/docker/docker
