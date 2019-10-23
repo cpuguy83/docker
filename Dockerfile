@@ -111,6 +111,7 @@ ARG DEBIAN_FRONTEND
 RUN --mount=type=cache,sharing=locked,id=moby-cross-false-aptlib,target=/var/lib/apt \
     --mount=type=cache,sharing=locked,id=moby-cross-false-aptcache,target=/var/cache/apt \
         apt-get update && apt-get install -y --no-install-recommends \
+            btrfs-tools \
             libapparmor-dev \
             libdevmapper-dev \
             libseccomp-dev
@@ -313,50 +314,41 @@ VOLUME /var/lib/docker
 # Wrap all commands in the "docker-in-docker" script to allow nested containers
 ENTRYPOINT ["hack/dind"]
 
+FROM runtime-dev AS engine-build-base
 # TODO: This is here because hack/make.sh binary copies these extras binaries
 # from $PATH into the bundles dir.
 # It would be nice to handle this in a different way.
-FROM runtime-dev-cross-false AS runtime-dev-extras
 COPY --from=tini /build/ /usr/local/bin/
 COPY --from=runc /build/ /usr/local/bin/
 COPY --from=containerd /build/ /usr/local/bin/
 COPY --from=rootlesskit /build/ /usr/local/bin/
 COPY --from=proxy /build/ /usr/local/bin/
-
-FROM runtime-dev-extras AS build-binary
 ARG DOCKER_GITCOMMIT=HEAD
+ENV DOCKER_GITCOMMIT=${DOCKER_GITCOMMIT}
 ARG VERSION
+ENV VERSION=${VERSION}
 ARG PLATFORM
+ENV PLATFORM=${PLATFORM}
 ARG PRODUCT
+ENV PRODUCT=${PRODUCT}
 ARG DEFAULT_PRODUCT_LICENSE
+ENV DEFAULT_PRODUCT_LICENSE=${DEFAULT_PRODUCT_LICENSE}
+ENV DOCKER_BUILDTAGS apparmor seccomp selinux
+
+FROM engine-build-base AS build-binary
 WORKDIR /go/src/github.com/docker/docker
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=bind,target=/go/src/github.com/docker/docker \
         PREFIX=/build hack/make.sh binary
 
-FROM runtime-dev-extras AS build-dynbinary
-ARG DOCKER_GITCOMMIT=HEAD
-ARG VERSION
-ARG PLATFORM
-ARG PRODUCT
-ARG DEFAULT_PRODUCT_LICENSE
+FROM engine-build-base AS build-dynbinary
 WORKDIR /go/src/github.com/docker/docker
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=bind,from=src,target=/go/src/github.com/docker/docker \
         PREFIX=/build hack/make.sh dynbinary
 
-FROM runtime-dev-cross-true AS build-cross
-COPY --from=tini /build/ /usr/local/bin/
-COPY --from=runc /build/ /usr/local/bin/
-COPY --from=containerd /build/ /usr/local/bin/
-COPY --from=rootlesskit /build/ /usr/local/bin/
-COPY --from=proxy /build/ /usr/local/bin/
-ARG DOCKER_GITCOMMIT=HEAD
+FROM engine-build-base AS build-cross
 ARG DOCKER_CROSSPLATFORMS=""
-ARG VERSION
-ARG PLATFORM
-ARG PRODUCT
-ARG DEFAULT_PRODUCT_LICENSE
 WORKDIR /go/src/github.com/docker/docker
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=bind,from=src,target=/go/src/github.com/docker/docker \

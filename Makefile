@@ -266,6 +266,7 @@ ifdef USE_BUILDX
 ifeq ($(BUILDX), bundles/buildx)
 buildx: bundles/buildx ## build buildx cli tool
 endif
+endif
 
 # This intentionally is not using the `--output` flag from the docker CLI, which
 # is a buildkit option. The idea here being that if buildx is being used, it's
