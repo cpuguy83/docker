@@ -6,6 +6,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/containerd/containerd/namespaces"
+
+	"github.com/containerd/containerd"
+
 	"github.com/containerd/containerd/content"
 	c8derrdefs "github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
@@ -57,6 +61,28 @@ func setupProgressOutput(outStream io.Writer, cancel func()) (progress.Output, f
 	return out, f
 }
 
+type fallbackResolverWrapper struct {
+	newResolver func(headers http.Header) remotes.Resolver
+	remotes.Resolver
+}
+
+func (rw *fallbackResolverWrapper) Resolve(ctx context.Context, ref string) (string, specs.Descriptor, error) {
+	resolved, desc, err := rw.Resolver.Resolve(ctx, ref)
+	if err == nil {
+		return resolved, desc, nil
+	}
+	logrus.WithError(err).WithField("ref", ref).Debug("Error while resolving reference, falling back to backwards compatible accept header format")
+
+	headers := http.Header{}
+	headers.Add("Accept", images.MediaTypeDockerSchema2Manifest)
+	headers.Add("Accept", images.MediaTypeDockerSchema2ManifestList)
+	headers.Add("Accept", specs.MediaTypeImageManifest)
+	headers.Add("Accept", specs.MediaTypeImageIndex)
+	rw.Resolver = rw.newResolver(headers)
+
+	return rw.Resolver.Resolve(ctx, ref)
+}
+
 // fetch the content related to the passed in reference into the blob store and appends the provided images.Handlers
 // There is no need to use remotes.FetchHandler since it already gets set
 func (pm *Manager) fetch(ctx context.Context, ref reference.Named, auth *types.AuthConfig, out progress.Output, metaHeader http.Header, handlers ...images.Handler) (err error) {
@@ -73,46 +99,31 @@ func (pm *Manager) fetch(ctx context.Context, ref reference.Named, auth *types.A
 	// Without this the ref key is "unknown" and we see a nasty warning message in the logs
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, mediaTypePluginConfig, "docker-plugin")
 
-	resolver, err := pm.newResolver(ctx, nil, auth, metaHeader, false)
-	if err != nil {
-		return err
-	}
-	resolved, desc, err := resolver.Resolve(ctx, withDomain.String())
-	if err != nil {
-		// This is backwards compatible with older versions of the distribution registry.
-		// The containerd client will add it's own accept header as a comma separated list of supported manifests.
-		// This is perfectly fine, unless you are talking to an older registry which does not split the comma separated list,
-		//   so it is never able to match a media type and it falls back to schema1 (yuck) and fails because our manifest the
-		//   fallback does not support plugin configs...
-		logrus.WithError(err).WithField("ref", withDomain).Debug("Error while resolving reference, falling back to backwards compatible accept header format")
-		headers := http.Header{}
-		headers.Add("Accept", images.MediaTypeDockerSchema2Manifest)
-		headers.Add("Accept", images.MediaTypeDockerSchema2ManifestList)
-		headers.Add("Accept", specs.MediaTypeImageManifest)
-		headers.Add("Accept", specs.MediaTypeImageIndex)
-		resolver, _ = pm.newResolver(ctx, nil, auth, headers, false)
-		if resolver != nil {
-			resolved, desc, err = resolver.Resolve(ctx, withDomain.String())
-			if err != nil {
-				logrus.WithError(err).WithField("ref", withDomain).Debug("Failed to resolve reference after falling back to backwards compatible accept header format")
+	fp := withFetchProgress(pm.blobStore, out, ref)
+	resolverFn := func(h http.Header) remotes.Resolver {
+		var headers http.Header
+		if len(h) == 0 {
+			headers = metaHeader
+		} else {
+			headers = h
+			for k, v := range metaHeader {
+				h[k] = v
 			}
 		}
-		if err != nil {
-			return errors.Wrap(err, "error resolving plugin reference")
-		}
+		return pm.newResolver(ctx, nil, auth, headers, false)
+	}
+	resolver := &fallbackResolverWrapper{
+		newResolver: resolverFn,
+		Resolver:    resolverFn(nil),
 	}
 
-	fetcher, err := resolver.Fetcher(ctx, resolved)
-	if err != nil {
-		return errors.Wrap(err, "error creating plugin image fetcher")
-	}
+	ctx = namespaces.WithNamespace(ctx, "moby.plugin")
+	_, err = pm.client.Pull(ctx, withDomain.String(), containerd.WithResolver(resolver), func(_ *containerd.Client, rCtx *containerd.RemoteContext) error {
+		rCtx.BaseHandlers = append([]images.Handler{fp}, handlers...)
+		return nil
+	})
 
-	fp := withFetchProgress(pm.blobStore, out, ref)
-	handlers = append([]images.Handler{fp, remotes.FetchHandler(pm.blobStore, fetcher)}, handlers...)
-	if err := images.Dispatch(ctx, images.Handlers(handlers...), nil, desc); err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // applyLayer makes an images.HandlerFunc which applies a fetched image rootfs layer to a directory.

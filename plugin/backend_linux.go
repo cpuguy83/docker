@@ -364,7 +364,7 @@ func (pm *Manager) Push(ctx context.Context, name string, metaHeader http.Header
 
 	statusTracker := docker.NewInMemoryTracker()
 
-	resolver, err := pm.newResolver(ctx, statusTracker, authConfig, metaHeader, false)
+	resolver := pm.newResolver(ctx, statusTracker, authConfig, metaHeader, false)
 	if err != nil {
 		return err
 	}
@@ -428,7 +428,7 @@ func (pm *Manager) Push(ctx context.Context, name string, metaHeader http.Header
 		// This is needed because the containerd pusher will only attempt the first registry config we pass, which would
 		// typically be https.
 		// If there are no http-only host configs found we'll error out anyway.
-		resolver, _ := pm.newResolver(ctx, statusTracker, authConfig, metaHeader, true)
+		resolver := pm.newResolver(ctx, statusTracker, authConfig, metaHeader, true)
 		if resolver != nil {
 			pusher, _ := resolver.Pusher(ctx, ref.String())
 			if pusher != nil {

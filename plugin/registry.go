@@ -30,7 +30,7 @@ func scope(ref reference.Named, push bool) string {
 	return scope
 }
 
-func (pm *Manager) newResolver(ctx context.Context, tracker docker.StatusTracker, auth *types.AuthConfig, headers http.Header, httpFallback bool) (remotes.Resolver, error) {
+func (pm *Manager) newResolver(ctx context.Context, tracker docker.StatusTracker, auth *types.AuthConfig, headers http.Header, httpFallback bool) remotes.Resolver {
 	if headers == nil {
 		headers = http.Header{}
 	}
@@ -40,7 +40,7 @@ func (pm *Manager) newResolver(ctx context.Context, tracker docker.StatusTracker
 		Tracker: tracker,
 		Headers: headers,
 		Hosts:   pm.registryHostsFn(auth, httpFallback),
-	}), nil
+	})
 }
 
 func registryHTTPClient(config *tls.Config) *http.Client {

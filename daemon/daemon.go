@@ -913,26 +913,13 @@ func NewDaemon(ctx context.Context, config *config.Config, pluginStore *plugin.S
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(defaults.DefaultMaxRecvMsgSize)),
 		grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(defaults.DefaultMaxSendMsgSize)),
 	}
-	if config.ContainerdAddr != "" {
-		d.containerdCli, err = containerd.New(config.ContainerdAddr, containerd.WithDefaultNamespace(config.ContainerdNamespace), containerd.WithDialOpts(gopts), containerd.WithTimeout(60*time.Second))
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to dial %q", config.ContainerdAddr)
-		}
+	d.containerdCli, err = containerd.New(config.ContainerdAddr, containerd.WithDefaultNamespace(config.ContainerdNamespace), containerd.WithDialOpts(gopts), containerd.WithTimeout(60*time.Second))
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to dial %q", config.ContainerdAddr)
 	}
 
 	createPluginExec := func(m *plugin.Manager) (plugin.Executor, error) {
-		var pluginCli *containerd.Client
-
-		// Windows is not currently using containerd, keep the
-		// client as nil
-		if config.ContainerdAddr != "" {
-			pluginCli, err = containerd.New(config.ContainerdAddr, containerd.WithDefaultNamespace(config.ContainerdPluginNamespace), containerd.WithDialOpts(gopts), containerd.WithTimeout(60*time.Second))
-			if err != nil {
-				return nil, errors.Wrapf(err, "failed to dial %q", config.ContainerdAddr)
-			}
-		}
-
-		return pluginexec.New(ctx, getPluginExecRoot(config.Root), pluginCli, config.ContainerdPluginNamespace, m, d.useShimV2())
+		return pluginexec.New(ctx, getPluginExecRoot(config.Root), d.containerdCli, config.ContainerdPluginNamespace, m, d.useShimV2())
 	}
 
 	// Plugin system initialization should happen before restore. Do not change order.
@@ -945,6 +932,7 @@ func NewDaemon(ctx context.Context, config *config.Config, pluginStore *plugin.S
 		LiveRestoreEnabled: config.LiveRestoreEnabled,
 		LogPluginEvent:     d.LogPluginEvent, // todo: make private
 		AuthzMiddleware:    config.AuthzMiddleware,
+		Client:             d.containerdCli,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "couldn't create plugin manager")

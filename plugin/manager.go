@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/containerd/containerd"
+
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/content/local"
 	"github.com/docker/distribution/reference"
@@ -62,6 +64,7 @@ type ManagerConfig struct {
 	ExecRoot           string
 	CreateExecutor     ExecutorCreator
 	AuthzMiddleware    *authorization.Middleware
+	Client             *containerd.Client
 }
 
 // ExecutorCreator is used in the manager config to pass in an `Executor`
@@ -73,6 +76,7 @@ type Manager struct {
 	mu        sync.RWMutex // protects cMap
 	muGC      sync.RWMutex // protects blobstore deletions
 	cMap      map[*v2.Plugin]*controller
+	client    containerd.Client
 	blobStore content.Store
 	publisher *pubsub.Publisher
 	executor  Executor
