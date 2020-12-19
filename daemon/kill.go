@@ -179,7 +179,9 @@ func (daemon *Daemon) Kill(container *containerpkg.Container) error {
 // killPossibleDeadProcess is a wrapper around killSig() suppressing "no such process" error.
 func (daemon *Daemon) killPossiblyDeadProcess(container *containerpkg.Container, sig int) error {
 	err := daemon.killWithSignal(container, sig)
+	logrus.WithError(err).WithField("pid", container.State.Pid).Error("KILLWITHSIGNAL")
 	if errdefs.IsNotFound(err) {
+		logrus.WithError(err).WithField("pid", container.State.Pid).Error("ISNOTFOUND")
 		e := errNoSuchProcess{container.GetPID(), sig}
 		logrus.Debug(e)
 		return e
