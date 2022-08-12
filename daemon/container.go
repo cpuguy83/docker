@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"time"
 
 	containertypes "github.com/docker/docker/api/types/container"
@@ -379,4 +380,30 @@ func translateWorkingDir(config *containertypes.Config) error {
 	}
 	config.WorkingDir = wd
 	return nil
+}
+
+// oomTracker keeps track of unprocessed OOM events
+// Since there is currently no way to get OOM information from containerd except through the event itself.
+// When an OOM event is received from containerd, the fact that the container OOMed is recorded here and is deleted once collected.
+type oomTracker struct {
+	mu    sync.Mutex
+	oomed map[string]struct{}
+}
+
+func (t *oomTracker) Add(id string) {
+	t.mu.Lock()
+	t.oomed[id] = struct{}{}
+	t.mu.Unlock()
+}
+
+func (t *oomTracker) Collect(id string) bool {
+	t.mu.Lock()
+	_, ok := t.oomed[id]
+	delete(t.oomed, id)
+	t.mu.Unlock()
+	return ok
+}
+
+func newOOMTracker() *oomTracker {
+	return &oomTracker{oomed: make(map[string]struct{})}
 }

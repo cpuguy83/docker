@@ -120,6 +120,8 @@ type Daemon struct {
 	// It stores metadata for the content store (used for manifest caching)
 	// This needs to be closed on daemon exit
 	mdDB *bbolt.DB
+
+	oomTracker *oomTracker
 }
 
 // StoreHosts stores the addresses the daemon is listening on
@@ -773,6 +775,7 @@ func NewDaemon(ctx context.Context, config *config.Config, pluginStore *plugin.S
 		configStore: config,
 		PluginStore: pluginStore,
 		startupDone: make(chan struct{}),
+		oomTracker:  newOOMTracker(),
 	}
 
 	// Ensure the daemon is properly shutdown if there is a failure during
