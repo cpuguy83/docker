@@ -1,0 +1,25 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.245.0/containers/docker-existing-dockerfile
+{
+	"name": "Dev shell",
+	"context": "..",
+	"dockerFile": "../Dockerfile",
+	"runArgs": [
+		"--privileged",
+		"-it",
+		"--workdir=/go/src/github.com/docker/docker"
+	],
+	"build": {
+		"target": "dev",
+		"cacheFrom": [
+			"ghcr.io/cpuguy83/docker:cache-master"
+		]
+	},
+	"mounts": [
+		"type=volume,source=docker-dev-cache,target=/root/.cache",
+		"type=volume,source=docker-mod-cache,target=/go/pkg/mod",
+		"type=bind,source=/run/docker.sock,target=/run/dockerhost/docker.sock"
+	],
+	"workspaceMount": "source=${localWorkspaceFolder},target=/go/src/github.com/docker/docker,type=bind",
+	"workspaceFolder": "/go/src/github.com/docker/docker"
+}
