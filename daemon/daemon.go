@@ -126,6 +126,7 @@ func (daemon *Daemon) StoreHosts(hosts []string) {
 		daemon.hosts = make(map[string]bool)
 	}
 	for _, h := range hosts {
+		// some random comment to test signing
 		daemon.hosts[h] = true
 	}
 }
