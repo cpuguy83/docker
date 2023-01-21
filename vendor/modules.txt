@@ -313,6 +313,9 @@ github.com/coreos/go-systemd/v22/activation
 github.com/coreos/go-systemd/v22/daemon
 github.com/coreos/go-systemd/v22/dbus
 github.com/coreos/go-systemd/v22/journal
+# github.com/cpuguy83/go-vsock v0.0.0-20230125173326-45c3f6a0be05
+## explicit; go 1.19
+github.com/cpuguy83/go-vsock
 # github.com/creack/pty v1.1.11
 ## explicit; go 1.13
 github.com/creack/pty

@@ -5,8 +5,10 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/coreos/go-systemd/v22/activation"
+	"github.com/cpuguy83/go-vsock"
 	"github.com/docker/docker/pkg/homedir"
 	"github.com/docker/go-connections/sockets"
 	"github.com/pkg/errors"
@@ -49,6 +51,42 @@ func Init(proto, addr, socketGroup string, tlsConfig *tls.Config) ([]net.Listene
 		if _, err := homedir.StickRuntimeDirContents([]string{addr}); err != nil {
 			// StickRuntimeDirContents returns nil error if XDG_RUNTIME_DIR is just unset
 			logrus.WithError(err).Warnf("cannot set sticky bit on socket %s under XDG_RUNTIME_DIR", addr)
+		}
+		ls = append(ls, l)
+	case "vsock":
+		portStr, _, _ := strings.Cut(addr, ",")
+		// var port int
+		// if portStr != "" {
+		// 	var err error
+		// 	port, err = strconv.Atoi(portStr)
+		// 	if err != nil {
+		// 		return nil, errors.Errorf("invalid vsock port: %q", addr)
+		// 	}
+		// }
+
+		// var cfg VsockConfig
+		// if found {
+		// 	for _, opt := range strings.Split(opts, ",") {
+		// 		key, value, found := strings.Cut(opt, "=")
+		// 		switch key {
+		// 		case "insecure-allow-local":
+		// 			allow := true
+		// 			if found {
+		// 				b, err := strconv.ParseBool(value)
+		// 				if err != nil {
+		// 					return nil, fmt.Errorf("invalid value for vsock option %q: %q: %w", opt, value, err)
+		// 				}
+		// 				allow = b
+		// 			}
+		// 			cfg.AllowLocal = allow
+		// 		default:
+		// 			return nil, errors.Errorf("invalid vsock option: %q", opt)
+		// 		}
+		// 	}
+		// }
+		l, err := vsock.Listen("vsock", ":"+portStr)
+		if err != nil {
+			return nil, errors.Wrapf(err, "can't create vsock socket %s", addr)
 		}
 		ls = append(ls, l)
 	default:

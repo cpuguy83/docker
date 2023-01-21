@@ -100,6 +100,8 @@ func parseDaemonHost(address string) (string, error) {
 		return a, nil
 	case "fd":
 		return address, nil
+	case "vsock":
+		return address, nil
 	default:
 		return "", errors.Errorf("invalid bind address (%s): unsupported proto '%s'", address, proto)
 	}
