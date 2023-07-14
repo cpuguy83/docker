@@ -4,22 +4,16 @@ import (
 	"context"
 	"strings"
 
-	"github.com/containerd/containerd/log"
 	"github.com/docker/docker/api/server/router"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/moby/buildkit/util/grpcerrors"
-	"github.com/moby/buildkit/util/tracing/detect"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
 )
-
-func init() {
-	// enable in memory recording for grpc traces
-	detect.Recorder = detect.NewTraceRecorder()
-}
 
 type grpcRouter struct {
 	routes     []router.Route
@@ -31,14 +25,11 @@ var propagators = propagation.NewCompositeTextMapPropagator(propagation.TraceCon
 
 // NewRouter initializes a new grpc http router
 func NewRouter(backends ...Backend) router.Router {
-	tp, err := detect.TracerProvider()
-	if err != nil {
-		log.G(context.TODO()).WithError(err).Error("failed to detect trace provider")
-	}
+	tp := otel.GetTracerProvider()
 
 	opts := []grpc.ServerOption{grpc.UnaryInterceptor(grpcerrors.UnaryServerInterceptor), grpc.StreamInterceptor(grpcerrors.StreamServerInterceptor)}
 	if tp != nil {
-		streamTracer := otelgrpc.StreamServerInterceptor(otelgrpc.WithTracerProvider(tp), otelgrpc.WithPropagators(propagators))
+		streamTracer := otelgrpc.StreamServerInterceptor(otelgrpc.WithTracerProvider(tp))
 		unary := grpc_middleware.ChainUnaryServer(unaryInterceptor(tp), grpcerrors.UnaryServerInterceptor)
 		stream := grpc_middleware.ChainStreamServer(streamTracer, grpcerrors.StreamServerInterceptor)
 		opts = []grpc.ServerOption{grpc.UnaryInterceptor(unary), grpc.StreamInterceptor(stream)}
