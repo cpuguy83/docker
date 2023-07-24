@@ -9,6 +9,7 @@ import (
 
 	ctd "github.com/containerd/containerd"
 	"github.com/containerd/containerd/content/local"
+	"github.com/containerd/containerd/log"
 	ctdmetadata "github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/snapshots"
 	"github.com/docker/docker/api/types"
@@ -18,6 +19,7 @@ import (
 	"github.com/docker/docker/builder/builder-next/adapters/snapshot"
 	"github.com/docker/docker/builder/builder-next/exporter/mobyexporter"
 	"github.com/docker/docker/builder/builder-next/imagerefchecker"
+	"github.com/docker/docker/builder/builder-next/pluginremotecache"
 	mobyworker "github.com/docker/docker/builder/builder-next/worker"
 	wlabel "github.com/docker/docker/builder/builder-next/worker/label"
 	"github.com/docker/docker/daemon/config"
@@ -120,27 +122,57 @@ func newSnapshotterController(ctx context.Context, rt http.RoundTripper, opt Opt
 		"gateway.v0":    gateway.NewGatewayFrontend(wc),
 	}
 
+	importers := map[string]remotecache.ResolveCacheImporterFunc{
+		"gha":      gha.ResolveCacheImporterFunc(),
+		"local":    localremotecache.ResolveCacheImporterFunc(opt.SessionManager),
+		"registry": registryremotecache.ResolveCacheImporterFunc(opt.SessionManager, wo.ContentStore, opt.RegistryHosts),
+	}
+
+	exporters := map[string]remotecache.ResolveCacheExporterFunc{
+		"gha":      gha.ResolveCacheExporterFunc(),
+		"inline":   inlineremotecache.ResolveCacheExporterFunc(),
+		"local":    localremotecache.ResolveCacheExporterFunc(opt.SessionManager),
+		"registry": registryremotecache.ResolveCacheExporterFunc(opt.SessionManager, opt.RegistryHosts),
+	}
+
+	pImporters, err := pluginremotecache.LoadCacheImporterPlugins(ctx, opt.PluginGetter)
+	if err != nil {
+		log.G(ctx).WithError(err).Warn("Could not load cache importer plugins for build controller")
+	}
+
+	for k, v := range pImporters {
+		if _, ok := importers[k]; ok {
+			log.G(ctx).WithField("plugin", k).Warn("Plugin cache importer has same name as builtin, skipping plugin")
+			continue
+		}
+		importers[k] = v
+	}
+
+	pExporters, err := pluginremotecache.LoadCacheExporterPlugins(ctx, opt.PluginGetter)
+	if err != nil {
+		log.G(ctx).WithError(err).Warn("Could not load cache exporter plugins for build controller")
+	}
+
+	for k, v := range pExporters {
+		if _, ok := exporters[k]; ok {
+			log.G(ctx).WithField("plugin", k).Warn("Plugin cache exporter has same name as builtin, skipping plugin")
+			continue
+		}
+		exporters[k] = v
+	}
+
 	return control.NewController(control.Opt{
-		SessionManager:   opt.SessionManager,
-		WorkerController: wc,
-		Frontends:        frontends,
-		CacheKeyStorage:  cacheStorage,
-		ResolveCacheImporterFuncs: map[string]remotecache.ResolveCacheImporterFunc{
-			"gha":      gha.ResolveCacheImporterFunc(),
-			"local":    localremotecache.ResolveCacheImporterFunc(opt.SessionManager),
-			"registry": registryremotecache.ResolveCacheImporterFunc(opt.SessionManager, wo.ContentStore, opt.RegistryHosts),
-		},
-		ResolveCacheExporterFuncs: map[string]remotecache.ResolveCacheExporterFunc{
-			"gha":      gha.ResolveCacheExporterFunc(),
-			"inline":   inlineremotecache.ResolveCacheExporterFunc(),
-			"local":    localremotecache.ResolveCacheExporterFunc(opt.SessionManager),
-			"registry": registryremotecache.ResolveCacheExporterFunc(opt.SessionManager, opt.RegistryHosts),
-		},
-		Entitlements:  getEntitlements(opt.BuilderConfig),
-		HistoryDB:     historyDB,
-		HistoryConfig: historyConf,
-		LeaseManager:  wo.LeaseManager,
-		ContentStore:  wo.ContentStore,
+		SessionManager:            opt.SessionManager,
+		WorkerController:          wc,
+		Frontends:                 frontends,
+		CacheKeyStorage:           cacheStorage,
+		ResolveCacheImporterFuncs: importers,
+		ResolveCacheExporterFuncs: exporters,
+		Entitlements:              getEntitlements(opt.BuilderConfig),
+		HistoryDB:                 historyDB,
+		HistoryConfig:             historyConf,
+		LeaseManager:              wo.LeaseManager,
+		ContentStore:              wo.ContentStore,
 	})
 }
 

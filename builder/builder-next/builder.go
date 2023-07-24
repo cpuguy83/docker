@@ -24,6 +24,7 @@ import (
 	"github.com/docker/docker/libnetwork"
 	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/idtools"
+	"github.com/docker/docker/pkg/plugingetter"
 	"github.com/docker/docker/pkg/streamformatter"
 	"github.com/docker/go-units"
 	controlapi "github.com/moby/buildkit/api/services/control"
@@ -93,6 +94,7 @@ type Opt struct {
 	Snapshotter         string
 	ContainerdAddress   string
 	ContainerdNamespace string
+	PluginGetter        plugingetter.PluginGetter
 }
 
 // Builder can build using BuildKit backend
