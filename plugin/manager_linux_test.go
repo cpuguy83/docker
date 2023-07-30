@@ -1,6 +1,7 @@
 package plugin // import "github.com/docker/docker/plugin"
 
 import (
+	"context"
 	"io"
 	"net"
 	"os"
@@ -21,6 +22,8 @@ import (
 
 func TestManagerWithPluginMounts(t *testing.T) {
 	skip.If(t, os.Getuid() != 0, "skipping test that requires root")
+	ctx := context.Background()
+
 	root, err := os.MkdirTemp("", "test-store-with-plugin-mounts")
 	if err != nil {
 		t.Fatal(err)
@@ -35,6 +38,7 @@ func TestManagerWithPluginMounts(t *testing.T) {
 	p2.PluginObj.Enabled = true
 
 	m, err := NewManager(
+		ctx,
 		ManagerConfig{
 			Store:          s,
 			Root:           managerRoot,
@@ -62,7 +66,7 @@ func TestManagerWithPluginMounts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := m.Remove(p1.GetID(), &types.PluginRmConfig{ForceRemove: true}); err != nil {
+	if err := m.Remove(ctx, p1.GetID(), &types.PluginRmConfig{ForceRemove: true}); err != nil {
 		t.Fatal(err)
 	}
 	if mounted, err := mountinfo.Mounted(p2Mount); !mounted || err != nil {
@@ -91,11 +95,12 @@ type simpleExecutor struct {
 	Executor
 }
 
-func (e *simpleExecutor) Create(id string, spec specs.Spec, stdout, stderr io.WriteCloser) error {
+func (e *simpleExecutor) Create(ctx context.Context, id string, spec specs.Spec, stdout, stderr io.WriteCloser) error {
 	return errors.New("Create failed")
 }
 
 func TestCreateFailed(t *testing.T) {
+	ctx := context.Background()
 	root, err := os.MkdirTemp("", "test-create-failed")
 	if err != nil {
 		t.Fatal(err)
@@ -106,7 +111,7 @@ func TestCreateFailed(t *testing.T) {
 	managerRoot := filepath.Join(root, "manager")
 	p := newTestPlugin(t, "create", "testcreate", managerRoot)
 
-	m, err := NewManager(
+	m, err := NewManager(ctx,
 		ManagerConfig{
 			Store:          s,
 			Root:           managerRoot,
@@ -122,11 +127,11 @@ func TestCreateFailed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := m.enable(p, &controller{}, false); err == nil {
+	if err := m.enable(ctx, p, &controller{}, false); err == nil {
 		t.Fatalf("expected Create failed error, got %v", err)
 	}
 
-	if err := m.Remove(p.GetID(), &types.PluginRmConfig{ForceRemove: true}); err != nil {
+	if err := m.Remove(ctx, p.GetID(), &types.PluginRmConfig{ForceRemove: true}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -137,7 +142,7 @@ type executorWithRunning struct {
 	exitChans map[string]chan struct{}
 }
 
-func (e *executorWithRunning) Create(id string, spec specs.Spec, stdout, stderr io.WriteCloser) error {
+func (e *executorWithRunning) Create(ctx context.Context, id string, spec specs.Spec, stdout, stderr io.WriteCloser) error {
 	sockAddr := filepath.Join(e.root, id, "plugin.sock")
 	ch := make(chan struct{})
 	if e.exitChans == nil {
@@ -148,25 +153,27 @@ func (e *executorWithRunning) Create(id string, spec specs.Spec, stdout, stderr 
 	return nil
 }
 
-func (e *executorWithRunning) IsRunning(id string) (bool, error) {
+func (e *executorWithRunning) IsRunning(ctx context.Context, id string) (bool, error) {
 	return true, nil
 }
 
-func (e *executorWithRunning) Restore(id string, stdout, stderr io.WriteCloser) (bool, error) {
+func (e *executorWithRunning) Restore(ctx context.Context, id string, stdout, stderr io.WriteCloser) (bool, error) {
 	return true, nil
 }
 
-func (e *executorWithRunning) Signal(id string, signal syscall.Signal) error {
+func (e *executorWithRunning) Signal(ctx context.Context, id string, signal syscall.Signal) error {
 	ch := e.exitChans[id]
 	ch <- struct{}{}
 	<-ch
-	e.m.HandleExitEvent(id)
+	e.m.HandleExitEvent(ctx, id)
 	return nil
 }
 
 func TestPluginAlreadyRunningOnStartup(t *testing.T) {
 	skip.If(t, os.Getuid() != 0, "skipping test that requires root")
 	t.Parallel()
+
+	ctx := context.Background()
 
 	root, err := os.MkdirTemp("", t.Name())
 	if err != nil {
@@ -206,7 +213,7 @@ func TestPluginAlreadyRunningOnStartup(t *testing.T) {
 			executor := &executorWithRunning{root: config.ExecRoot}
 			config.CreateExecutor = func(m *Manager) (Executor, error) { executor.m = m; return executor, nil }
 
-			if err := executor.Create(p.GetID(), specs.Spec{}, nil, nil); err != nil {
+			if err := executor.Create(ctx, p.GetID(), specs.Spec{}, nil, nil); err != nil {
 				t.Fatal(err)
 			}
 
@@ -230,11 +237,11 @@ func TestPluginAlreadyRunningOnStartup(t *testing.T) {
 			}
 			defer containerfs.EnsureRemoveAll(config.ExecRoot)
 
-			m, err := NewManager(config)
+			m, err := NewManager(ctx, config)
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer m.Shutdown()
+			defer m.Shutdown(ctx)
 
 			p = s.GetAll()[p.GetID()] // refresh `p` with what the manager knows
 			if p.Client() == nil {

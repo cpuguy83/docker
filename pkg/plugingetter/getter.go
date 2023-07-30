@@ -47,6 +47,6 @@ type CountedPlugin interface {
 type PluginGetter interface {
 	Get(name, capability string, mode int) (CompatPlugin, error)
 	GetAllByCap(capability string) ([]CompatPlugin, error)
-	GetAllManagedPluginsByCap(capability string) []CompatPlugin
+	GetAllManagedPluginsByCap(apability string) []CompatPlugin
 	Handle(capability string, callback func(string, *plugins.Client))
 }

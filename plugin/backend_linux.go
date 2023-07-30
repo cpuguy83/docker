@@ -46,8 +46,8 @@ var acceptedPluginFilterTags = map[string]bool{
 }
 
 // Disable deactivates a plugin. This means resources (volumes, networks) cant use them.
-func (pm *Manager) Disable(refOrID string, config *types.PluginDisableConfig) error {
-	p, err := pm.config.Store.GetV2Plugin(refOrID)
+func (pm *Manager) Disable(ctx context.Context, refOrID string, config *types.PluginDisableConfig) error {
+	p, err := pm.config.Store.GetV2Plugin(ctx, refOrID)
 	if err != nil {
 		return err
 	}
@@ -65,7 +65,7 @@ func (pm *Manager) Disable(refOrID string, config *types.PluginDisableConfig) er
 		}
 	}
 
-	if err := pm.disable(p, c); err != nil {
+	if err := pm.disable(ctx, p, c); err != nil {
 		return err
 	}
 	pm.publisher.Publish(EventDisable{Plugin: p.PluginObj})
@@ -74,14 +74,14 @@ func (pm *Manager) Disable(refOrID string, config *types.PluginDisableConfig) er
 }
 
 // Enable activates a plugin, which implies that they are ready to be used by containers.
-func (pm *Manager) Enable(refOrID string, config *types.PluginEnableConfig) error {
-	p, err := pm.config.Store.GetV2Plugin(refOrID)
+func (pm *Manager) Enable(ctx context.Context, refOrID string, config *types.PluginEnableConfig) error {
+	p, err := pm.config.Store.GetV2Plugin(ctx, refOrID)
 	if err != nil {
 		return err
 	}
 
 	c := &controller{timeoutInSecs: config.Timeout}
-	if err := pm.enable(p, c, false); err != nil {
+	if err := pm.enable(ctx, p, c, false); err != nil {
 		return err
 	}
 	pm.publisher.Publish(EventEnable{Plugin: p.PluginObj})
@@ -90,8 +90,8 @@ func (pm *Manager) Enable(refOrID string, config *types.PluginEnableConfig) erro
 }
 
 // Inspect examines a plugin config
-func (pm *Manager) Inspect(refOrID string) (tp *types.Plugin, err error) {
-	p, err := pm.config.Store.GetV2Plugin(refOrID)
+func (pm *Manager) Inspect(ctx context.Context, refOrID string) (tp *types.Plugin, err error) {
+	p, err := pm.config.Store.GetV2Plugin(ctx, refOrID)
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +208,7 @@ func (pm *Manager) Privileges(ctx context.Context, ref reference.Named, metaHead
 //
 // TODO: replace reference package usage with simpler url.Parse semantics
 func (pm *Manager) Upgrade(ctx context.Context, ref reference.Named, name string, metaHeader http.Header, authConfig *registry.AuthConfig, privileges types.PluginPrivileges, outStream io.Writer) (err error) {
-	p, err := pm.config.Store.GetV2Plugin(name)
+	p, err := pm.config.Store.GetV2Plugin(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -233,7 +233,7 @@ func (pm *Manager) Upgrade(ctx context.Context, ref reference.Named, name string
 	var md fetchMeta
 
 	ctx, cancel := context.WithCancel(ctx)
-	out, waitProgress := setupProgressOutput(outStream, cancel)
+	out, waitProgress := setupProgressOutput(ctx, outStream, cancel)
 	defer waitProgress()
 
 	if err := pm.fetch(ctx, ref, authConfig, out, metaHeader, storeFetchMetadata(&md), childrenHandler(pm.blobStore), applyLayer(pm.blobStore, tmpRootFSDir, out)); err != nil {
@@ -245,7 +245,7 @@ func (pm *Manager) Upgrade(ctx context.Context, ref reference.Named, name string
 		return err
 	}
 
-	if err := pm.upgradePlugin(p, md.config, md.manifest, md.blobs, tmpRootFSDir, &privileges); err != nil {
+	if err := pm.upgradePlugin(ctx, p, md.config, md.manifest, md.blobs, tmpRootFSDir, &privileges); err != nil {
 		return err
 	}
 	p.PluginObj.PluginReference = ref.String()
@@ -279,7 +279,7 @@ func (pm *Manager) Pull(ctx context.Context, ref reference.Named, name string, m
 	var md fetchMeta
 
 	ctx, cancel := context.WithCancel(ctx)
-	out, waitProgress := setupProgressOutput(outStream, cancel)
+	out, waitProgress := setupProgressOutput(ctx, outStream, cancel)
 	defer waitProgress()
 
 	if err := pm.fetch(ctx, ref, authConfig, out, metaHeader, storeFetchMetadata(&md), childrenHandler(pm.blobStore), applyLayer(pm.blobStore, tmpRootFSDir, out)); err != nil {
@@ -299,7 +299,7 @@ func (pm *Manager) Pull(ctx context.Context, ref reference.Named, name string, m
 	optsList = append(optsList, refOpt)
 
 	// TODO: tmpRootFSDir is empty but should have layers in it
-	p, err := pm.createPlugin(name, md.config, md.manifest, md.blobs, tmpRootFSDir, &privileges, optsList...)
+	p, err := pm.createPlugin(ctx, name, md.config, md.manifest, md.blobs, tmpRootFSDir, &privileges, optsList...)
 	if err != nil {
 		return err
 	}
@@ -310,7 +310,7 @@ func (pm *Manager) Pull(ctx context.Context, ref reference.Named, name string, m
 }
 
 // List displays the list of plugins and associated metadata.
-func (pm *Manager) List(pluginFilters filters.Args) ([]types.Plugin, error) {
+func (pm *Manager) List(ctx context.Context, pluginFilters filters.Args) ([]types.Plugin, error) {
 	if err := pluginFilters.Validate(acceptedPluginFilterTags); err != nil {
 		return nil, err
 	}
@@ -355,7 +355,7 @@ next:
 
 // Push pushes a plugin to the registry.
 func (pm *Manager) Push(ctx context.Context, name string, metaHeader http.Header, authConfig *registry.AuthConfig, outStream io.Writer) error {
-	p, err := pm.config.Store.GetV2Plugin(name)
+	p, err := pm.config.Store.GetV2Plugin(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -380,7 +380,7 @@ func (pm *Manager) Push(ctx context.Context, name string, metaHeader http.Header
 	pj := newPushJobs(statusTracker)
 
 	ctx, cancel := context.WithCancel(ctx)
-	out, waitProgress := setupProgressOutput(outStream, cancel)
+	out, waitProgress := setupProgressOutput(ctx, outStream, cancel)
 	defer waitProgress()
 
 	progressHandler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
@@ -558,8 +558,8 @@ func writeManifest(ctx context.Context, cs content.Store, m *manifest) (ocispec.
 }
 
 // Remove deletes plugin's root directory.
-func (pm *Manager) Remove(name string, config *types.PluginRmConfig) error {
-	p, err := pm.config.Store.GetV2Plugin(name)
+func (pm *Manager) Remove(ctx context.Context, name string, config *types.PluginRmConfig) error {
+	p, err := pm.config.Store.GetV2Plugin(ctx, name)
 	pm.mu.RLock()
 	c := pm.cMap[p]
 	pm.mu.RUnlock()
@@ -578,8 +578,8 @@ func (pm *Manager) Remove(name string, config *types.PluginRmConfig) error {
 	}
 
 	if p.IsEnabled() {
-		if err := pm.disable(p, c); err != nil {
-			log.G(context.TODO()).Errorf("failed to disable plugin '%s': %s", p.Name(), err)
+		if err := pm.disable(ctx, p, c); err != nil {
+			log.G(ctx).Errorf("failed to disable plugin '%s': %s", p.Name(), err)
 		}
 	}
 
@@ -605,8 +605,8 @@ func (pm *Manager) Remove(name string, config *types.PluginRmConfig) error {
 }
 
 // Set sets plugin args
-func (pm *Manager) Set(name string, args []string) error {
-	p, err := pm.config.Store.GetV2Plugin(name)
+func (pm *Manager) Set(ctx context.Context, name string, args []string) error {
+	p, err := pm.config.Store.GetV2Plugin(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -720,7 +720,7 @@ func (pm *Manager) CreateFromContext(ctx context.Context, tarCtx io.ReadCloser, 
 		return
 	}
 
-	p, err := pm.createPlugin(name, configDigest, desc.Digest, layers, tmpRootFSDir, nil)
+	p, err := pm.createPlugin(ctx, name, configDigest, desc.Digest, layers, tmpRootFSDir, nil)
 	if err != nil {
 		return err
 	}

@@ -119,7 +119,7 @@ func CreateInRegistry(ctx context.Context, repo string, auth *registry.AuthConfi
 		CreateExecutor:  dummyExec,
 		LogPluginEvent:  func(id, name, action string) {}, // panics when not set
 	}
-	manager, err := plugin.NewManager(managerConfig)
+	manager, err := plugin.NewManager(ctx, managerConfig)
 	if err != nil {
 		return errors.Wrap(err, "error creating plugin manager")
 	}

@@ -38,10 +38,10 @@ var validFullID = regexp.MustCompile(`^([a-f0-9]{64})$`)
 
 // Executor is the interface that the plugin manager uses to interact with for starting/stopping plugins
 type Executor interface {
-	Create(id string, spec specs.Spec, stdout, stderr io.WriteCloser) error
-	IsRunning(id string) (bool, error)
-	Restore(id string, stdout, stderr io.WriteCloser) (alive bool, err error)
-	Signal(id string, signal syscall.Signal) error
+	Create(ctx context.Context, id string, spec specs.Spec, stdout, stderr io.WriteCloser) error
+	IsRunning(ctx context.Context, id string) (bool, error)
+	Restore(ctx context.Context, id string, stdout, stderr io.WriteCloser) (alive bool, err error)
+	Signal(ctx context.Context, id string, signal syscall.Signal) error
 }
 
 // EndpointResolver provides looking up registry endpoints for pulling.
@@ -49,9 +49,9 @@ type EndpointResolver interface {
 	LookupPullEndpoints(hostname string) (endpoints []registry.APIEndpoint, err error)
 }
 
-func (pm *Manager) restorePlugin(p *v2.Plugin, c *controller) error {
+func (pm *Manager) restorePlugin(ctx context.Context, p *v2.Plugin, c *controller) error {
 	if p.IsEnabled() {
-		return pm.restore(p, c)
+		return pm.restore(ctx, p, c)
 	}
 	return nil
 }
@@ -92,7 +92,7 @@ type controller struct {
 }
 
 // NewManager returns a new plugin manager.
-func NewManager(config ManagerConfig) (*Manager, error) {
+func NewManager(ctx context.Context, config ManagerConfig) (*Manager, error) {
 	manager := &Manager{
 		config: config,
 	}
@@ -113,7 +113,7 @@ func NewManager(config ManagerConfig) (*Manager, error) {
 	}
 
 	manager.cMap = make(map[*v2.Plugin]*controller)
-	if err := manager.reload(); err != nil {
+	if err := manager.reload(ctx); err != nil {
 		return nil, errors.Wrap(err, "failed to restore plugins")
 	}
 
@@ -127,14 +127,14 @@ func (pm *Manager) tmpDir() string {
 
 // HandleExitEvent is called when the executor receives the exit event
 // In the future we may change this, but for now all we care about is the exit event.
-func (pm *Manager) HandleExitEvent(id string) error {
-	p, err := pm.config.Store.GetV2Plugin(id)
+func (pm *Manager) HandleExitEvent(ctx context.Context, id string) error {
+	p, err := pm.config.Store.GetV2Plugin(ctx, id)
 	if err != nil {
 		return err
 	}
 
 	if err := os.RemoveAll(filepath.Join(pm.config.ExecRoot, id)); err != nil {
-		log.G(context.TODO()).WithError(err).WithField("id", id).Error("Could not remove plugin bundle dir")
+		log.G(ctx).WithError(err).WithField("id", id).Error("Could not remove plugin bundle dir")
 	}
 
 	pm.mu.RLock()
@@ -147,18 +147,18 @@ func (pm *Manager) HandleExitEvent(id string) error {
 	pm.mu.RUnlock()
 
 	if restart {
-		pm.enable(p, c, true)
+		pm.enable(ctx, p, c, true)
 	} else if err := recursiveUnmount(filepath.Join(pm.config.Root, id)); err != nil {
 		return errors.Wrap(err, "error cleaning up plugin mounts")
 	}
 	return nil
 }
 
-func handleLoadError(err error, id string) {
+func handleLoadError(ctx context.Context, err error, id string) {
 	if err == nil {
 		return
 	}
-	logger := log.G(context.TODO()).WithError(err).WithField("id", id)
+	logger := log.G(ctx).WithError(err).WithField("id", id)
 	if errors.Is(err, os.ErrNotExist) {
 		// Likely some error while removing on an older version of docker
 		logger.Warn("missing plugin config, skipping: this may be caused due to a failed remove and requires manual cleanup.")
@@ -167,7 +167,7 @@ func handleLoadError(err error, id string) {
 	logger.Error("error loading plugin, skipping")
 }
 
-func (pm *Manager) reload() error { // todo: restore
+func (pm *Manager) reload(ctx context.Context) error { // todo: restore
 	dir, err := os.ReadDir(pm.config.Root)
 	if err != nil {
 		return errors.Wrapf(err, "failed to read %v", pm.config.Root)
@@ -177,7 +177,7 @@ func (pm *Manager) reload() error { // todo: restore
 		if validFullID.MatchString(v.Name()) {
 			p, err := pm.loadPlugin(v.Name())
 			if err != nil {
-				handleLoadError(err, v.Name())
+				handleLoadError(ctx, err, v.Name())
 				continue
 			}
 			plugins[p.GetID()] = p
@@ -185,7 +185,7 @@ func (pm *Manager) reload() error { // todo: restore
 			if validFullID.MatchString(strings.TrimSuffix(v.Name(), "-removing")) {
 				// There was likely some error while removing this plugin, let's try to remove again here
 				if err := containerfs.EnsureRemoveAll(v.Name()); err != nil {
-					log.G(context.TODO()).WithError(err).WithField("id", v.Name()).Warn("error while attempting to clean up previously removed plugin")
+					log.G(ctx).WithError(err).WithField("id", v.Name()).Warn("error while attempting to clean up previously removed plugin")
 				}
 			}
 		}
@@ -203,8 +203,8 @@ func (pm *Manager) reload() error { // todo: restore
 
 		go func(p *v2.Plugin) {
 			defer wg.Done()
-			if err := pm.restorePlugin(p, c); err != nil {
-				log.G(context.TODO()).WithError(err).WithField("id", p.GetID()).Error("Failed to restore plugin")
+			if err := pm.restorePlugin(ctx, p, c); err != nil {
+				log.G(ctx).WithError(err).WithField("id", p.GetID()).Error("Failed to restore plugin")
 				return
 			}
 
@@ -224,13 +224,13 @@ func (pm *Manager) reload() error { // todo: restore
 							rootfsProp := filepath.Join(p.Rootfs, p.PluginObj.Config.PropagatedMount)
 							if _, err := os.Stat(rootfsProp); err == nil {
 								if err := os.Rename(rootfsProp, propRoot); err != nil {
-									log.G(context.TODO()).WithError(err).WithField("dir", propRoot).Error("error migrating propagated mount storage")
+									log.G(ctx).WithError(err).WithField("dir", propRoot).Error("error migrating propagated mount storage")
 								}
 							}
 						}
 
 						if err := os.MkdirAll(propRoot, 0o755); err != nil {
-							log.G(context.TODO()).Errorf("failed to create PropagatedMount directory at %s: %v", propRoot, err)
+							log.G(ctx).Errorf("failed to create PropagatedMount directory at %s: %v", propRoot, err)
 						}
 					}
 				}
@@ -241,8 +241,8 @@ func (pm *Manager) reload() error { // todo: restore
 
 			if requiresManualRestore {
 				// if liveRestore is not enabled, the plugin will be stopped now so we should enable it
-				if err := pm.enable(p, c, true); err != nil {
-					log.G(context.TODO()).WithError(err).WithField("id", p.GetID()).Error("failed to enable plugin")
+				if err := pm.enable(ctx, p, c, true); err != nil {
+					log.G(ctx).WithError(err).WithField("id", p.GetID()).Error("failed to enable plugin")
 				}
 			}
 		}(p)
@@ -253,7 +253,7 @@ func (pm *Manager) reload() error { // todo: restore
 
 // Get looks up the requested plugin in the store.
 func (pm *Manager) Get(idOrName string) (*v2.Plugin, error) {
-	return pm.config.Store.GetV2Plugin(idOrName)
+	return pm.config.Store.GetV2Plugin(context.TODO(), idOrName)
 }
 
 func (pm *Manager) loadPlugin(id string) (*v2.Plugin, error) {
