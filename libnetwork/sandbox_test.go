@@ -1,6 +1,7 @@
 package libnetwork
 
 import (
+	"context"
 	"runtime"
 	"strconv"
 	"testing"
@@ -16,9 +17,10 @@ import (
 
 func getTestEnv(t *testing.T, opts ...[]NetworkOption) (*Controller, []*Network) {
 	skip.If(t, runtime.GOOS == "windows", "test only works on linux")
+	ctx := context.Background()
 
 	const netType = "bridge"
-	c, err := New(
+	c, err := New(ctx,
 		OptionBoltdbWithRandomDBFile(t),
 		config.OptionDriverConfig(netType, map[string]any{
 			netlabel.GenericData: options.Generic{"EnableIPForwarding": true},

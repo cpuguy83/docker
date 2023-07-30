@@ -17,7 +17,7 @@ type Store struct {
 	/* handlers are necessary for transition path of legacy plugins
 	 * to the new model. Legacy plugins use Handle() for registering an
 	 * activation callback.*/
-	handlers map[string][]func(string, *plugins.Client)
+	handlers map[string][]plugins.CallbackFunc
 }
 
 // NewStore creates a Store.
@@ -25,7 +25,7 @@ func NewStore() *Store {
 	return &Store{
 		plugins:  make(map[string]*v2.Plugin),
 		specOpts: make(map[string][]SpecOpt),
-		handlers: make(map[string][]func(string, *plugins.Client)),
+		handlers: make(map[string][]plugins.CallbackFunc),
 	}
 }
 

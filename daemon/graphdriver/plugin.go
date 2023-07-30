@@ -1,6 +1,7 @@
 package graphdriver // import "github.com/docker/docker/daemon/graphdriver"
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
@@ -11,11 +12,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-func lookupPlugin(name string, pg plugingetter.PluginGetter, config Options) (Driver, error) {
+func lookupPlugin(ctx context.Context, name string, pg plugingetter.PluginGetter, config Options) (Driver, error) {
 	if !config.ExperimentalEnabled {
 		return nil, fmt.Errorf("graphdriver plugins are only supported with experimental mode")
 	}
-	pl, err := pg.Get(name, "GraphDriver", plugingetter.Acquire)
+	pl, err := pg.Get(ctx, name, "GraphDriver", plugingetter.Acquire)
 	if err != nil {
 		return nil, fmt.Errorf("Error looking up graphdriver plugin %s: %v", name, err)
 	}

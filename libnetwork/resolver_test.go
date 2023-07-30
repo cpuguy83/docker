@@ -97,9 +97,10 @@ func checkDNSRRType(t *testing.T, actual, expected uint16) {
 
 func TestDNSIPQuery(t *testing.T) {
 	skip.If(t, runtime.GOOS == "windows", "test only works on linux")
+	ctx := context.Background()
 
 	defer netnsutils.SetupTestOSContext(t)()
-	c, err := New()
+	c, err := New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,11 +237,12 @@ func waitForLocalDNSServer(t *testing.T) {
 
 func TestDNSProxyServFail(t *testing.T) {
 	skip.If(t, runtime.GOOS == "windows", "test only works on linux")
+	ctx := context.Background()
 
 	osctx := netnsutils.SetupTestOSContextEx(t)
 	defer osctx.Cleanup(t)
 
-	c, err := New()
+	c, err := New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

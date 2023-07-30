@@ -3,6 +3,7 @@
 package libnetwork_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -32,7 +33,9 @@ func TestMain(m *testing.M) {
 
 func newController(t *testing.T) *libnetwork.Controller {
 	t.Helper()
-	c, err := libnetwork.New(
+	ctx := context.TODO()
+
+	c, err := libnetwork.New(ctx,
 		libnetwork.OptionBoltdbWithRandomDBFile(t),
 		config.OptionDriverConfig(bridgeNetType, map[string]interface{}{
 			netlabel.GenericData: options.Generic{
@@ -1156,6 +1159,7 @@ func TestEndpointUpdateParent(t *testing.T) {
 }
 
 func TestInvalidRemoteDriver(t *testing.T) {
+	ctx := context.Background()
 	mux := http.NewServeMux()
 	server := httptest.NewServer(mux)
 	if server == nil {
@@ -1181,7 +1185,7 @@ func TestInvalidRemoteDriver(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctrlr, err := libnetwork.New()
+	ctrlr, err := libnetwork.New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}

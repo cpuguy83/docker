@@ -252,8 +252,8 @@ func (pm *Manager) reload(ctx context.Context) error { // todo: restore
 }
 
 // Get looks up the requested plugin in the store.
-func (pm *Manager) Get(idOrName string) (*v2.Plugin, error) {
-	return pm.config.Store.GetV2Plugin(context.TODO(), idOrName)
+func (pm *Manager) Get(ctx context.Context, idOrName string) (*v2.Plugin, error) {
+	return pm.config.Store.GetV2Plugin(ctx, idOrName)
 }
 
 func (pm *Manager) loadPlugin(id string) (*v2.Plugin, error) {

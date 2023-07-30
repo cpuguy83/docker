@@ -3,6 +3,7 @@ package layer // import "github.com/docker/docker/layer"
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -44,6 +45,8 @@ func TestLayerMigration(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Failing on Windows")
 	}
+
+	ctx := context.Background()
 	td, err := os.MkdirTemp("", "migration-test-")
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +72,7 @@ func TestLayerMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	graph, err := newVFSGraphDriver(filepath.Join(td, "graphdriver-"))
+	graph, err := newVFSGraphDriver(ctx, filepath.Join(td, "graphdriver-"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,6 +183,8 @@ func TestLayerMigrationNoTarsplit(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Failing on Windows")
 	}
+
+	ctx := context.Background()
 	td, err := os.MkdirTemp("", "migration-test-")
 	if err != nil {
 		t.Fatal(err)
@@ -195,7 +200,7 @@ func TestLayerMigrationNoTarsplit(t *testing.T) {
 		newTestFile("/root/.bashrc", []byte("# Updated configuration"), 0o644),
 	}
 
-	graph, err := newVFSGraphDriver(filepath.Join(td, "graphdriver-"))
+	graph, err := newVFSGraphDriver(ctx, filepath.Join(td, "graphdriver-"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -48,7 +48,7 @@ type Backend interface {
 	Remove(ctx context.Context, name string, config *types.PluginRmConfig) error
 	Pull(ctx context.Context, ref reference.Named, name string, metaHeaders http.Header, authConfig *registry.AuthConfig, privileges types.PluginPrivileges, outStream io.Writer, opts ...plugin.CreateOpt) error
 	Upgrade(ctx context.Context, ref reference.Named, name string, metaHeaders http.Header, authConfig *registry.AuthConfig, privileges types.PluginPrivileges, outStream io.Writer) error
-	Get(name string) (*v2.Plugin, error)
+	Get(ctx context.Context, name string) (*v2.Plugin, error)
 	SubscribeEvents(buffer int, events ...plugin.Event) (eventCh <-chan interface{}, cancel func())
 }
 
@@ -102,7 +102,7 @@ func (p *Controller) Prepare(ctx context.Context) (err error) {
 	var authConfig registry.AuthConfig
 	privs := convertPrivileges(p.spec.Privileges)
 
-	pl, err := p.backend.Get(p.spec.Name)
+	pl, err := p.backend.Get(ctx, p.spec.Name)
 
 	defer func() {
 		if pl != nil && err == nil {
@@ -126,7 +126,7 @@ func (p *Controller) Prepare(ctx context.Context) (err error) {
 	if err := p.backend.Pull(ctx, remote, p.spec.Name, nil, &authConfig, privs, io.Discard, plugin.WithSwarmService(p.serviceID), plugin.WithEnv(p.spec.Env)); err != nil {
 		return err
 	}
-	pl, err = p.backend.Get(p.spec.Name)
+	pl, err = p.backend.Get(ctx, p.spec.Name)
 	if err != nil {
 		return err
 	}
@@ -139,7 +139,7 @@ func (p *Controller) Prepare(ctx context.Context) (err error) {
 func (p *Controller) Start(ctx context.Context) error {
 	p.logger.Debug("Start")
 
-	pl, err := p.backend.Get(p.pluginID)
+	pl, err := p.backend.Get(ctx, p.pluginID)
 	if err != nil {
 		return err
 	}
@@ -160,7 +160,7 @@ func (p *Controller) Start(ctx context.Context) error {
 func (p *Controller) Wait(ctx context.Context) error {
 	p.logger.Debug("Wait")
 
-	pl, err := p.backend.Get(p.pluginID)
+	pl, err := p.backend.Get(ctx, p.pluginID)
 	if err != nil {
 		return err
 	}
@@ -219,7 +219,7 @@ func (p *Controller) Terminate(ctx context.Context) error {
 func (p *Controller) Remove(ctx context.Context) error {
 	p.logger.Debug("Remove")
 
-	pl, err := p.backend.Get(p.pluginID)
+	pl, err := p.backend.Get(ctx, p.pluginID)
 	if err != nil {
 		if isNotFound(err) {
 			return nil

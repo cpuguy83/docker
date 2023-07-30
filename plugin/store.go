@@ -134,8 +134,7 @@ func (ps *Store) Remove(p *v2.Plugin) {
 }
 
 // Get returns an enabled plugin matching the given name and capability.
-func (ps *Store) Get(name, capability string, mode int) (plugingetter.CompatPlugin, error) {
-	ctx := context.TODO()
+func (ps *Store) Get(ctx context.Context, name, capability string, mode int) (plugingetter.CompatPlugin, error) {
 	// Lookup using new model.
 	if ps != nil {
 		p, err := ps.GetV2Plugin(ctx, name)
@@ -163,7 +162,7 @@ func (ps *Store) Get(name, capability string, mode int) (plugingetter.CompatPlug
 		return nil, errNotFound(name)
 	}
 
-	p, err := plugins.Get(name, capability)
+	p, err := plugins.Get(ctx, name, capability)
 	if err == nil {
 		return p, nil
 	}
@@ -179,7 +178,7 @@ func (ps *Store) GetAllManagedPluginsByCap(capability string) []plugingetter.Com
 }
 
 // GetAllByCap returns a list of enabled plugins matching the given capability.
-func (ps *Store) GetAllByCap(capability string) ([]plugingetter.CompatPlugin, error) {
+func (ps *Store) GetAllByCap(ctx context.Context, capability string) ([]plugingetter.CompatPlugin, error) {
 	result := make([]plugingetter.CompatPlugin, 0, 1)
 
 	/* Daemon start always calls plugin.Init thereby initializing a store.
@@ -195,7 +194,7 @@ func (ps *Store) GetAllByCap(capability string) ([]plugingetter.CompatPlugin, er
 	// Lookup with legacy model
 	if allowV1PluginsFallback {
 		l := plugins.NewLocalRegistry()
-		pl, err := l.GetAll(capability)
+		pl, err := l.GetAll(ctx, capability)
 		if err != nil {
 			return nil, errors.Wrap(errdefs.System(err), "legacy plugin")
 		}
@@ -213,14 +212,14 @@ func pluginType(cap string) string {
 // Handle sets a callback for a given capability. It is only used by network
 // and ipam drivers during plugin registration. The callback registers the
 // driver with the subsystem (network, ipam).
-func (ps *Store) Handle(capability string, callback func(string, *plugins.Client)) {
+func (ps *Store) Handle(capability string, callback plugins.CallbackFunc) {
 	typ := pluginType(capability)
 
 	// Register callback with new plugin model.
 	ps.Lock()
 	handlers, ok := ps.handlers[typ]
 	if !ok {
-		handlers = []func(string, *plugins.Client){}
+		handlers = []plugins.CallbackFunc{}
 	}
 	handlers = append(handlers, callback)
 	ps.handlers[typ] = handlers
@@ -242,10 +241,10 @@ func (ps *Store) RegisterRuntimeOpt(cap string, opts ...SpecOpt) {
 }
 
 // CallHandler calls the registered callback. It is invoked during plugin enable.
-func (ps *Store) CallHandler(p *v2.Plugin) {
+func (ps *Store) CallHandler(ctx context.Context, p *v2.Plugin) {
 	for _, typ := range p.GetTypes() {
 		for _, handler := range ps.handlers[typ.String()] {
-			handler(p.Name(), p.Client())
+			handler(ctx, p.Name(), p.Client())
 		}
 	}
 }

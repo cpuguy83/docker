@@ -4,6 +4,7 @@ package graphtest // import "github.com/docker/docker/daemon/graphdriver/graphte
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"os"
 	"path"
@@ -29,12 +30,12 @@ type Driver struct {
 	refCount int
 }
 
-func newDriver(t testing.TB, name string, options []string) *Driver {
+func newDriver(ctx context.Context, t testing.TB, name string, options []string) *Driver {
 	root, err := os.MkdirTemp("", "docker-graphtest-")
 	assert.NilError(t, err)
 
 	assert.NilError(t, os.MkdirAll(root, 0o755))
-	d, err := graphdriver.GetDriver(name, nil, graphdriver.Options{DriverOptions: options, Root: root})
+	d, err := graphdriver.GetDriver(ctx, name, nil, graphdriver.Options{DriverOptions: options, Root: root})
 	if err != nil {
 		t.Logf("graphdriver: %v\n", err)
 		if graphdriver.IsDriverNotSupported(err) {
@@ -54,8 +55,9 @@ func cleanup(t testing.TB, d *Driver) {
 
 // GetDriver create a new driver with given name or return an existing driver with the name updating the reference count.
 func GetDriver(t testing.TB, name string, options ...string) graphdriver.Driver {
+	ctx := context.TODO()
 	if drv == nil {
-		drv = newDriver(t, name, options)
+		drv = newDriver(ctx, t, name, options)
 	} else {
 		drv.refCount++
 	}

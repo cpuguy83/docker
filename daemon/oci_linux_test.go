@@ -19,7 +19,7 @@ import (
 	"gotest.tools/v3/skip"
 )
 
-func setupFakeDaemon(t *testing.T, c *container.Container) *Daemon {
+func setupFakeDaemon(ctx context.Context, t *testing.T, c *container.Container) *Daemon {
 	t.Helper()
 	root := t.TempDir()
 
@@ -27,7 +27,7 @@ func setupFakeDaemon(t *testing.T, c *container.Container) *Daemon {
 	err := os.MkdirAll(rootfs, 0o755)
 	assert.NilError(t, err)
 
-	netController, err := libnetwork.New()
+	netController, err := libnetwork.New(ctx)
 	assert.NilError(t, err)
 
 	d := &Daemon{
@@ -79,6 +79,7 @@ func (i *fakeImageService) StorageDriver() string {
 // in "Duplicate mount point" error from the engine.
 // https://github.com/moby/moby/issues/35455
 func TestTmpfsDevShmNoDupMount(t *testing.T) {
+	ctx := context.Background()
 	skip.If(t, os.Getuid() != 0, "skipping test that requires root")
 	c := &container.Container{
 		ShmPath: "foobar", // non-empty, for c.IpcMounts() to work
@@ -90,7 +91,7 @@ func TestTmpfsDevShmNoDupMount(t *testing.T) {
 			},
 		},
 	}
-	d := setupFakeDaemon(t, c)
+	d := setupFakeDaemon(ctx, t, c)
 
 	_, err := d.createSpec(context.TODO(), &configStore{}, c)
 	assert.Check(t, err)
@@ -102,13 +103,14 @@ func TestTmpfsDevShmNoDupMount(t *testing.T) {
 // https://github.com/moby/moby/issues/36503
 func TestIpcPrivateVsReadonly(t *testing.T) {
 	skip.If(t, os.Getuid() != 0, "skipping test that requires root")
+	ctx := context.Background()
 	c := &container.Container{
 		HostConfig: &containertypes.HostConfig{
 			IpcMode:        containertypes.IPCModePrivate,
 			ReadonlyRootfs: true,
 		},
 	}
-	d := setupFakeDaemon(t, c)
+	d := setupFakeDaemon(ctx, t, c)
 
 	s, err := d.createSpec(context.TODO(), &configStore{}, c)
 	assert.Check(t, err)
@@ -126,6 +128,7 @@ func TestIpcPrivateVsReadonly(t *testing.T) {
 // Config.Domainname) are overridden by an explicit sysctl in the HostConfig.
 func TestSysctlOverride(t *testing.T) {
 	skip.If(t, os.Getuid() != 0, "skipping test that requires root")
+	ctx := context.Background()
 	c := &container.Container{
 		Config: &containertypes.Config{
 			Hostname:   "foobar",
@@ -136,7 +139,7 @@ func TestSysctlOverride(t *testing.T) {
 			Sysctls:     map[string]string{},
 		},
 	}
-	d := setupFakeDaemon(t, c)
+	d := setupFakeDaemon(ctx, t, c)
 
 	// Ensure that the implicit sysctl is set correctly.
 	s, err := d.createSpec(context.TODO(), &configStore{}, c)
@@ -179,6 +182,7 @@ func TestSysctlOverride(t *testing.T) {
 // with host networking
 func TestSysctlOverrideHost(t *testing.T) {
 	skip.If(t, os.Getuid() != 0, "skipping test that requires root")
+	ctx := context.Background()
 	c := &container.Container{
 		Config: &containertypes.Config{},
 		HostConfig: &containertypes.HostConfig{
@@ -186,7 +190,7 @@ func TestSysctlOverrideHost(t *testing.T) {
 			Sysctls:     map[string]string{},
 		},
 	}
-	d := setupFakeDaemon(t, c)
+	d := setupFakeDaemon(ctx, t, c)
 
 	// Ensure that the implicit sysctl is not set
 	s, err := d.createSpec(context.TODO(), &configStore{}, c)
@@ -217,13 +221,14 @@ func TestGetSourceMount(t *testing.T) {
 
 func TestDefaultResources(t *testing.T) {
 	skip.If(t, os.Getuid() != 0, "skipping test that requires root") // TODO: is this actually true? I'm guilty of following the cargo cult here.
+	ctx := context.Background()
 
 	c := &container.Container{
 		HostConfig: &containertypes.HostConfig{
 			IpcMode: containertypes.IPCModeNone,
 		},
 	}
-	d := setupFakeDaemon(t, c)
+	d := setupFakeDaemon(ctx, t, c)
 
 	s, err := d.createSpec(context.Background(), &configStore{}, c)
 	assert.NilError(t, err)

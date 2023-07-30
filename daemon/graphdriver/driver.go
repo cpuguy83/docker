@@ -158,12 +158,12 @@ func Register(name string, initFunc InitFunc) error {
 }
 
 // GetDriver initializes and returns the registered driver
-func GetDriver(name string, pg plugingetter.PluginGetter, config Options) (Driver, error) {
+func GetDriver(ctx context.Context, name string, pg plugingetter.PluginGetter, config Options) (Driver, error) {
 	if initFunc, exists := drivers[name]; exists {
 		return initFunc(filepath.Join(config.Root, name), config.DriverOptions, config.IDMap)
 	}
 
-	pluginDriver, err := lookupPlugin(name, pg, config)
+	pluginDriver, err := lookupPlugin(ctx, name, pg, config)
 	if err == nil {
 		return pluginDriver, nil
 	}
@@ -189,14 +189,13 @@ type Options struct {
 }
 
 // New creates the driver and initializes it at the specified root.
-func New(name string, pg plugingetter.PluginGetter, config Options) (Driver, error) {
-	ctx := context.TODO()
+func New(ctx context.Context, name string, pg plugingetter.PluginGetter, config Options) (Driver, error) {
 	if name != "" {
 		log.G(ctx).Infof("[graphdriver] trying configured driver: %s", name)
 		if err := checkRemoved(name); err != nil {
 			return nil, err
 		}
-		return GetDriver(name, pg, config)
+		return GetDriver(ctx, name, pg, config)
 	}
 
 	// Guess for prior driver

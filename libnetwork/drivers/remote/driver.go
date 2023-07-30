@@ -34,17 +34,17 @@ func newDriver(name string, client *plugins.Client) *driver {
 
 // Register makes sure a remote driver is registered with r when a network
 // driver plugin is activated.
-func Register(r driverapi.Registerer, pg plugingetter.PluginGetter) error {
-	newPluginHandler := func(name string, client *plugins.Client) {
+func Register(ctx context.Context, r driverapi.Registerer, pg plugingetter.PluginGetter) error {
+	newPluginHandler := func(ctx context.Context, name string, client *plugins.Client) {
 		// negotiate driver capability with client
 		d := newDriver(name, client)
 		c, err := d.getCapabilities()
 		if err != nil {
-			log.G(context.TODO()).Errorf("error getting capability for %s due to %v", name, err)
+			log.G(ctx).Errorf("error getting capability for %s due to %v", name, err)
 			return
 		}
 		if err = r.RegisterDriver(name, d, *c); err != nil {
-			log.G(context.TODO()).Errorf("error registering driver for %s due to %v", name, err)
+			log.G(ctx).Errorf("error registering driver for %s due to %v", name, err)
 		}
 	}
 
@@ -58,7 +58,7 @@ func Register(r driverapi.Registerer, pg plugingetter.PluginGetter) error {
 			if err != nil {
 				return err
 			}
-			newPluginHandler(ap.Name(), client)
+			newPluginHandler(ctx, ap.Name(), client)
 		}
 	}
 	handleFunc(driverapi.NetworkPluginEndpointType, newPluginHandler)

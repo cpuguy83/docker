@@ -110,7 +110,7 @@ func (c *container) AttachTask(ctx context.Context, attachStdio libcontainerdtyp
 		if err != nil {
 			return nil, err
 		}
-		return attachStdio(dio)
+		return attachStdio(ctx, dio)
 	}
 	t, err := c.c8dCtr.Task(ctx, attachIO)
 	if err != nil {
@@ -553,7 +553,7 @@ func (c *container) createIO(ctx context.Context, fifos *cio.FIFOSet, stdinClose
 		})
 	}
 
-	rio, err := attachStdio(io)
+	rio, err := attachStdio(ctx, io)
 	if err != nil {
 		io.Cancel()
 		io.Close()

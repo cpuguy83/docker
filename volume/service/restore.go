@@ -60,7 +60,7 @@ func (s *VolumeStore) restore() {
 			}
 
 			// increment driver refcount
-			s.drivers.CreateDriver(meta.Driver)
+			s.drivers.CreateDriver(ctx, meta.Driver)
 
 			// cache the volume
 			s.globalLock.Lock()

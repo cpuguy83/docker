@@ -1,6 +1,7 @@
 package libnetwork
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -20,6 +21,7 @@ const (
 )
 
 func TestUserChain(t *testing.T) {
+	ctx := context.Background()
 	iptable4 := iptables.GetIptable(iptables.IPv4)
 	iptable6 := iptables.GetIptable(iptables.IPv6)
 
@@ -54,7 +56,7 @@ func TestUserChain(t *testing.T) {
 			defer netnsutils.SetupTestOSContext(t)()
 			defer resetIptables(t)
 
-			c, err := New(config.OptionDriverConfig("bridge", map[string]any{
+			c, err := New(ctx, config.OptionDriverConfig("bridge", map[string]any{
 				netlabel.GenericData: options.Generic{
 					"EnableIPTables":  tc.iptables,
 					"EnableIP6Tables": tc.iptables,

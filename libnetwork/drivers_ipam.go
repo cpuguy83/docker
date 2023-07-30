@@ -1,6 +1,8 @@
 package libnetwork
 
 import (
+	"context"
+
 	"github.com/docker/docker/libnetwork/ipamapi"
 	builtinIpam "github.com/docker/docker/libnetwork/ipams/builtin"
 	nullIpam "github.com/docker/docker/libnetwork/ipams/null"
@@ -9,7 +11,7 @@ import (
 	"github.com/docker/docker/pkg/plugingetter"
 )
 
-func initIPAMDrivers(r ipamapi.Registerer, pg plugingetter.PluginGetter, addressPool []*ipamutils.NetworkToSplit) error {
+func initIPAMDrivers(ctx context.Context, r ipamapi.Registerer, pg plugingetter.PluginGetter, addressPool []*ipamutils.NetworkToSplit) error {
 	// TODO: pass address pools as arguments to builtinIpam.Init instead of
 	// indirectly through global mutable state. Swarmkit references that
 	// function so changing its signature breaks the build.
@@ -26,5 +28,5 @@ func initIPAMDrivers(r ipamapi.Registerer, pg plugingetter.PluginGetter, address
 		}
 	}
 
-	return remoteIpam.Register(r, pg)
+	return remoteIpam.Register(ctx, r, pg)
 }

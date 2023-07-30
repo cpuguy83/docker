@@ -364,9 +364,9 @@ func (container *Container) CheckpointDir() string {
 }
 
 // StartLogger starts a new logger driver for the container.
-func (container *Container) StartLogger() (logger.Logger, error) {
+func (container *Container) StartLogger(ctx context.Context) (logger.Logger, error) {
 	cfg := container.HostConfig.LogConfig
-	initDriver, err := logger.GetLogDriver(cfg.Type)
+	initDriver, err := logger.GetLogDriver(ctx, cfg.Type)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get logging factory")
 	}
@@ -432,11 +432,11 @@ func (container *Container) StartLogger() (logger.Logger, error) {
 			}
 
 			if !container.LocalLogCacheMeta.HaveNotifyEnabled {
-				log.G(context.TODO()).WithField("container", container.ID).WithField("driver", container.HostConfig.LogConfig.Type).Info("Configured log driver does not support reads, enabling local file cache for container logs")
+				log.G(ctx).WithField("container", container.ID).WithField("driver", container.HostConfig.LogConfig.Type).Info("Configured log driver does not support reads, enabling local file cache for container logs")
 				container.LocalLogCacheMeta.HaveNotifyEnabled = true
 			}
 			info.LogPath = logPath
-			l, err = cache.WithLocalCache(l, info)
+			l, err = cache.WithLocalCache(ctx, l, info)
 			if err != nil {
 				return nil, errors.Wrap(err, "error setting up local container log cache")
 			}
@@ -623,12 +623,12 @@ func (container *Container) CancelAttachContext() {
 	container.attachContext.mu.Unlock()
 }
 
-func (container *Container) startLogging() error {
+func (container *Container) startLogging(ctx context.Context) error {
 	if container.HostConfig.LogConfig.Type == "none" {
 		return nil // do not start logging routines
 	}
 
-	l, err := container.StartLogger()
+	l, err := container.StartLogger(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to initialize logging driver: %v", err)
 	}
@@ -662,8 +662,8 @@ func (container *Container) CloseStreams() error {
 }
 
 // InitializeStdio is called by libcontainerd to connect the stdio.
-func (container *Container) InitializeStdio(iop *cio.DirectIO) (cio.IO, error) {
-	if err := container.startLogging(); err != nil {
+func (container *Container) InitializeStdio(ctx context.Context, iop *cio.DirectIO) (cio.IO, error) {
+	if err := container.startLogging(ctx); err != nil {
 		container.Reset(false)
 		return nil, err
 	}

@@ -26,8 +26,8 @@ var builtInCacheLogOpts = map[string]bool{
 
 // WithLocalCache wraps the passed in logger with a logger caches all writes locally
 // in addition to writing to the passed in logger.
-func WithLocalCache(l logger.Logger, info logger.Info) (logger.Logger, error) {
-	initLogger, err := logger.GetLogDriver(DriverName)
+func WithLocalCache(ctx context.Context, l logger.Logger, info logger.Info) (logger.Logger, error) {
+	initLogger, err := logger.GetLogDriver(ctx, DriverName)
 	if err != nil {
 		return nil, err
 	}

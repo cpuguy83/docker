@@ -108,7 +108,7 @@ func (daemon *Daemon) ContainerAttachRaw(prefixOrName string, stdin io.ReadClose
 
 func (daemon *Daemon) containerAttach(c *container.Container, cfg *stream.AttachConfig, logs, doStream bool) error {
 	if logs {
-		logDriver, logCreated, err := daemon.getLogger(c)
+		logDriver, logCreated, err := daemon.getLogger(context.TODO(), c)
 		if err != nil {
 			return err
 		}

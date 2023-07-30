@@ -55,8 +55,8 @@ type StoreOptions struct {
 }
 
 // NewStoreFromOptions creates a new Store instance
-func NewStoreFromOptions(options StoreOptions) (Store, error) {
-	driver, err := graphdriver.New(options.GraphDriver, options.PluginGetter, graphdriver.Options{
+func NewStoreFromOptions(ctx context.Context, options StoreOptions) (Store, error) {
+	driver, err := graphdriver.New(ctx, options.GraphDriver, options.PluginGetter, graphdriver.Options{
 		Root:                options.Root,
 		DriverOptions:       options.GraphDriverOptions,
 		IDMap:               options.IDMapping,

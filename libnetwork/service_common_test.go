@@ -1,6 +1,7 @@
 package libnetwork
 
 import (
+	"context"
 	"net"
 	"runtime"
 	"testing"
@@ -14,9 +15,10 @@ import (
 
 func TestCleanupServiceDiscovery(t *testing.T) {
 	skip.If(t, runtime.GOOS == "windows", "test only works on linux")
+	ctx := context.Background()
 
 	defer netnsutils.SetupTestOSContext(t)()
-	c, err := New()
+	c, err := New(ctx)
 	assert.NilError(t, err)
 	defer c.Stop()
 
@@ -59,8 +61,9 @@ func TestCleanupServiceDiscovery(t *testing.T) {
 
 func TestDNSOptions(t *testing.T) {
 	skip.If(t, runtime.GOOS == "windows", "test only works on linux")
+	ctx := context.Background()
 
-	c, err := New()
+	c, err := New(ctx)
 	assert.NilError(t, err)
 
 	sb, err := c.NewSandbox("cnt1", nil)

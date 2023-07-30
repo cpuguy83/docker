@@ -52,20 +52,20 @@ func registerMetricsPluginCallback(store *plugin.Store, sockPath string) {
 		})
 		f(s)
 	})
-	store.Handle(metricsPluginType, func(name string, client *plugins.Client) {
+	store.Handle(metricsPluginType, func(ctx context.Context, name string, client *plugins.Client) {
 		// Use lookup since nothing in the system can really reference it, no need
 		// to protect against removal
-		p, err := store.Get(name, metricsPluginType, plugingetter.Lookup)
+		p, err := store.Get(ctx, name, metricsPluginType, plugingetter.Lookup)
 		if err != nil {
 			return
 		}
 
 		adapter, err := makePluginAdapter(p)
 		if err != nil {
-			log.G(context.TODO()).WithError(err).WithField("plugin", p.Name()).Error("Error creating plugin adapter")
+			log.G(ctx).WithError(err).WithField("plugin", p.Name()).Error("Error creating plugin adapter")
 		}
 		if err := adapter.StartMetrics(); err != nil {
-			log.G(context.TODO()).WithError(err).WithField("plugin", p.Name()).Error("Error starting metrics collector plugin")
+			log.G(ctx).WithError(err).WithField("plugin", p.Name()).Error("Error starting metrics collector plugin")
 		}
 	})
 }

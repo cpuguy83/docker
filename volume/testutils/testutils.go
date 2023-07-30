@@ -1,6 +1,7 @@
 package testutils // import "github.com/docker/docker/volume/testutils"
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -202,7 +203,7 @@ func NewFakePluginGetter(pls ...plugingetter.CompatPlugin) plugingetter.PluginGe
 
 // This ignores the second argument since we only care about volume drivers here,
 // there shouldn't be any other kind of plugin in here
-func (g *fakePluginGetter) Get(name, _ string, mode int) (plugingetter.CompatPlugin, error) {
+func (g *fakePluginGetter) Get(ctx context.Context, name, _ string, mode int) (plugingetter.CompatPlugin, error) {
 	p, ok := g.plugins[name]
 	if !ok {
 		return nil, errors.New("not found")
@@ -211,7 +212,7 @@ func (g *fakePluginGetter) Get(name, _ string, mode int) (plugingetter.CompatPlu
 	return p, nil
 }
 
-func (g *fakePluginGetter) GetAllByCap(capability string) ([]plugingetter.CompatPlugin, error) {
+func (g *fakePluginGetter) GetAllByCap(ctx context.Context, capability string) ([]plugingetter.CompatPlugin, error) {
 	panic("GetAllByCap shouldn't be called")
 }
 
@@ -219,7 +220,7 @@ func (g *fakePluginGetter) GetAllManagedPluginsByCap(capability string) []plugin
 	panic("GetAllManagedPluginsByCap should not be called")
 }
 
-func (g *fakePluginGetter) Handle(capability string, callback func(string, *plugins.Client)) {
+func (g *fakePluginGetter) Handle(capability string, callback plugins.CallbackFunc) {
 	panic("Handle should not be called")
 }
 

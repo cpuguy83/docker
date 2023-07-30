@@ -1,6 +1,7 @@
 package drvregistry
 
 import (
+	"context"
 	"runtime"
 	"sort"
 	"testing"
@@ -13,19 +14,20 @@ import (
 	is "gotest.tools/v3/assert/cmp"
 )
 
-func getNewIPAMs(t *testing.T) *IPAMs {
+func getNewIPAMs(ctx context.Context, t *testing.T) *IPAMs {
 	r := &IPAMs{}
 
 	assert.Assert(t, builtinIpam.Register(r))
-	assert.Assert(t, remoteIpam.Register(r, nil))
+	assert.Assert(t, remoteIpam.Register(ctx, r, nil))
 	assert.Assert(t, nullIpam.Register(r))
 
 	return r
 }
 
 func TestIPAMs(t *testing.T) {
+	ctx := context.Background()
 	t.Run("IPAM", func(t *testing.T) {
-		reg := getNewIPAMs(t)
+		reg := getNewIPAMs(ctx, t)
 
 		i, cap := reg.IPAM("default")
 		assert.Check(t, i != nil)
@@ -33,7 +35,7 @@ func TestIPAMs(t *testing.T) {
 	})
 
 	t.Run("WalkIPAMs", func(t *testing.T) {
-		reg := getNewIPAMs(t)
+		reg := getNewIPAMs(ctx, t)
 
 		ipams := make([]string, 0, 2)
 		reg.WalkIPAMs(func(name string, driver ipamapi.Ipam, cap *ipamapi.Capability) bool {

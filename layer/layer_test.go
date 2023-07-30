@@ -2,6 +2,7 @@ package layer // import "github.com/docker/docker/layer"
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -25,7 +26,7 @@ func init() {
 	vfs.CopyDir = defaultArchiver.CopyWithTar
 }
 
-func newVFSGraphDriver(td string) (graphdriver.Driver, error) {
+func newVFSGraphDriver(ctx context.Context, td string) (graphdriver.Driver, error) {
 	uidMap := []idtools.IDMap{
 		{
 			ContainerID: 0,
@@ -42,16 +43,16 @@ func newVFSGraphDriver(td string) (graphdriver.Driver, error) {
 	}
 
 	options := graphdriver.Options{Root: td, IDMap: idtools.IdentityMapping{UIDMaps: uidMap, GIDMaps: gidMap}}
-	return graphdriver.GetDriver("vfs", nil, options)
+	return graphdriver.GetDriver(ctx, "vfs", nil, options)
 }
 
-func newTestGraphDriver(t *testing.T) (graphdriver.Driver, func()) {
+func newTestGraphDriver(ctx context.Context, t *testing.T) (graphdriver.Driver, func()) {
 	td, err := os.MkdirTemp("", "graph-")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	driver, err := newVFSGraphDriver(td)
+	driver, err := newVFSGraphDriver(ctx, td)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,12 +63,13 @@ func newTestGraphDriver(t *testing.T) (graphdriver.Driver, func()) {
 }
 
 func newTestStore(t *testing.T) (Store, string, func()) {
+	ctx := context.TODO()
 	td, err := os.MkdirTemp("", "layerstore-")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	graph, graphcleanup := newTestGraphDriver(t)
+	graph, graphcleanup := newTestGraphDriver(ctx, t)
 
 	ls, err := newStoreFromGraphDriver(td, graph)
 	if err != nil {

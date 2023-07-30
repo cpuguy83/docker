@@ -48,7 +48,7 @@ func (daemon *Daemon) ContainerLogs(ctx context.Context, containerName string, c
 		return nil, false, logger.ErrReadLogsNotSupported{}
 	}
 
-	cLog, cLogCreated, err := daemon.getLogger(ctr)
+	cLog, cLogCreated, err := daemon.getLogger(ctx, ctr)
 	if err != nil {
 		return nil, false, err
 	}
@@ -162,7 +162,7 @@ func (daemon *Daemon) ContainerLogs(ctx context.Context, containerName string, c
 	return messageChan, ctr.Config.Tty, nil
 }
 
-func (daemon *Daemon) getLogger(container *container.Container) (l logger.Logger, created bool, err error) {
+func (daemon *Daemon) getLogger(ctx context.Context, container *container.Container) (l logger.Logger, created bool, err error) {
 	container.Lock()
 	if container.State.Running {
 		l = container.LogDriver
@@ -170,7 +170,7 @@ func (daemon *Daemon) getLogger(container *container.Container) (l logger.Logger
 	container.Unlock()
 	if l == nil {
 		created = true
-		l, err = container.StartLogger()
+		l, err = container.StartLogger(ctx)
 	}
 	return
 }

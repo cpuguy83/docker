@@ -71,7 +71,7 @@ func (driverNotFoundError) NotFound() {}
 // lookup returns the driver associated with the given name. If a
 // driver with the given name has not been registered it checks if
 // there is a VolumeDriver plugin available with the given name.
-func (s *Store) lookup(name string, mode int) (volume.Driver, error) {
+func (s *Store) lookup(ctx context.Context, name string, mode int) (volume.Driver, error) {
 	if name == "" {
 		return nil, errdefs.InvalidParameter(errors.New("driver name cannot be empty"))
 	}
@@ -85,7 +85,7 @@ func (s *Store) lookup(name string, mode int) (volume.Driver, error) {
 		return ext, nil
 	}
 	if s.pluginGetter != nil {
-		p, err := s.pluginGetter.Get(name, extName, mode)
+		p, err := s.pluginGetter.Get(ctx, name, extName, mode)
 		if err != nil {
 			return nil, errors.Wrap(err, "error looking up volume plugin "+name)
 		}
@@ -97,8 +97,8 @@ func (s *Store) lookup(name string, mode int) (volume.Driver, error) {
 		if err := validateDriver(d); err != nil {
 			if mode > 0 {
 				// Undo any reference count changes from the initial `Get`
-				if _, err := s.pluginGetter.Get(name, extName, mode*-1); err != nil {
-					log.G(context.TODO()).WithError(err).WithField("action", "validate-driver").WithField("plugin", name).Error("error releasing reference to plugin")
+				if _, err := s.pluginGetter.Get(ctx, name, extName, mode*-1); err != nil {
+					log.G(ctx).WithError(err).WithField("action", "validate-driver").WithField("plugin", name).Error("error releasing reference to plugin")
 				}
 			}
 			return nil, err
@@ -146,20 +146,20 @@ func (s *Store) Register(d volume.Driver, name string) bool {
 
 // GetDriver returns a volume driver by its name.
 // If the driver is empty, it looks for the local driver.
-func (s *Store) GetDriver(name string) (volume.Driver, error) {
-	return s.lookup(name, getter.Lookup)
+func (s *Store) GetDriver(ctx context.Context, name string) (volume.Driver, error) {
+	return s.lookup(ctx, name, getter.Lookup)
 }
 
 // CreateDriver returns a volume driver by its name and increments RefCount.
 // If the driver is empty, it looks for the local driver.
-func (s *Store) CreateDriver(name string) (volume.Driver, error) {
-	return s.lookup(name, getter.Acquire)
+func (s *Store) CreateDriver(ctx context.Context, name string) (volume.Driver, error) {
+	return s.lookup(ctx, name, getter.Acquire)
 }
 
 // ReleaseDriver returns a volume driver by its name and decrements RefCount..
 // If the driver is empty, it looks for the local driver.
-func (s *Store) ReleaseDriver(name string) (volume.Driver, error) {
-	return s.lookup(name, getter.Release)
+func (s *Store) ReleaseDriver(ctx context.Context, name string) (volume.Driver, error) {
+	return s.lookup(ctx, name, getter.Release)
 }
 
 // GetDriverList returns list of volume drivers registered.
@@ -176,11 +176,11 @@ func (s *Store) GetDriverList() []string {
 }
 
 // GetAllDrivers lists all the registered drivers
-func (s *Store) GetAllDrivers() ([]volume.Driver, error) {
+func (s *Store) GetAllDrivers(ctx context.Context) ([]volume.Driver, error) {
 	var plugins []getter.CompatPlugin
 	if s.pluginGetter != nil {
 		var err error
-		plugins, err = s.pluginGetter.GetAllByCap(extName)
+		plugins, err = s.pluginGetter.GetAllByCap(ctx, extName)
 		if err != nil {
 			return nil, fmt.Errorf("error listing plugins: %v", err)
 		}

@@ -98,4 +98,4 @@ type Task interface {
 }
 
 // StdioCallback is called to connect a container or process stdio.
-type StdioCallback func(io *cio.DirectIO) (cio.IO, error)
+type StdioCallback func(ctx context.Context, io *cio.DirectIO) (cio.IO, error)

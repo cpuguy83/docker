@@ -241,7 +241,7 @@ func (cli *DaemonCli) start(opts *daemonOptions) (err error) {
 	d.StoreHosts(hosts)
 
 	// validate after NewDaemon has restored enabled plugins. Don't change order.
-	if err := validateAuthzPlugins(cli.Config.AuthorizationPlugins, pluginStore); err != nil {
+	if err := validateAuthzPlugins(ctx, cli.Config.AuthorizationPlugins, pluginStore); err != nil {
 		return errors.Wrap(err, "failed to validate authorization plugin")
 	}
 
@@ -401,7 +401,7 @@ func newRouterOptions(ctx context.Context, config *config.Config, d *daemon.Daem
 func (cli *DaemonCli) reloadConfig() {
 	ctx := context.TODO()
 	reload := func(c *config.Config) {
-		if err := validateAuthzPlugins(c.AuthorizationPlugins, cli.d.PluginStore); err != nil {
+		if err := validateAuthzPlugins(ctx, c.AuthorizationPlugins, cli.d.PluginStore); err != nil {
 			log.G(ctx).Fatalf("Error validating authorization plugin: %v", err)
 			return
 		}
@@ -839,9 +839,9 @@ func createAndStartCluster(cli *DaemonCli, d *daemon.Daemon) (*cluster.Cluster, 
 
 // validates that the plugins requested with the --authorization-plugin flag are valid AuthzDriver
 // plugins present on the host and available to the daemon
-func validateAuthzPlugins(requestedPlugins []string, pg plugingetter.PluginGetter) error {
+func validateAuthzPlugins(ctx context.Context, requestedPlugins []string, pg plugingetter.PluginGetter) error {
 	for _, reqPlugin := range requestedPlugins {
-		if _, err := pg.Get(reqPlugin, authorization.AuthZApiImplements, plugingetter.Lookup); err != nil {
+		if _, err := pg.Get(ctx, reqPlugin, authorization.AuthZApiImplements, plugingetter.Lookup); err != nil {
 			return err
 		}
 	}

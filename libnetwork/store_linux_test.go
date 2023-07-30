@@ -1,6 +1,7 @@
 package libnetwork
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,22 +13,24 @@ import (
 )
 
 func TestBoltdbBackend(t *testing.T) {
+	ctx := context.Background()
 	defer os.Remove(datastore.DefaultScope("").Client.Address)
-	testLocalBackend(t, "", "", nil)
+	testLocalBackend(ctx, t, "", "", nil)
 	tmpPath := filepath.Join(t.TempDir(), "boltdb.db")
-	testLocalBackend(t, "boltdb", tmpPath, &store.Config{
+	testLocalBackend(ctx, t, "boltdb", tmpPath, &store.Config{
 		Bucket: "testBackend",
 	})
 }
 
 func TestNoPersist(t *testing.T) {
+	ctx := context.Background()
 	dbFile := filepath.Join(t.TempDir(), "bolt.db")
 	configOption := func(c *config.Config) {
 		c.Scope.Client.Provider = "boltdb"
 		c.Scope.Client.Address = dbFile
 		c.Scope.Client.Config = &store.Config{Bucket: "testBackend"}
 	}
-	testController, err := New(configOption)
+	testController, err := New(ctx, configOption)
 	if err != nil {
 		t.Fatalf("Error creating new controller: %v", err)
 	}
@@ -44,7 +47,7 @@ func TestNoPersist(t *testing.T) {
 
 	// Create a new controller using the same database-file. The network
 	// should not have persisted.
-	testController, err = New(configOption)
+	testController, err = New(ctx, configOption)
 	if err != nil {
 		t.Fatalf("Error creating new controller: %v", err)
 	}

@@ -1,6 +1,7 @@
 package libnetwork
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -310,9 +311,10 @@ func compareNwLists(a, b []*net.IPNet) bool {
 }
 
 func TestAuxAddresses(t *testing.T) {
+	ctx := context.Background()
 	defer netnsutils.SetupTestOSContext(t)()
 
-	c, err := New()
+	c, err := New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,10 +350,11 @@ func TestAuxAddresses(t *testing.T) {
 
 func TestSRVServiceQuery(t *testing.T) {
 	skip.If(t, runtime.GOOS == "windows", "test only works on linux")
+	ctx := context.Background()
 
 	defer netnsutils.SetupTestOSContext(t)()
 
-	c, err := New()
+	c, err := New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -445,10 +448,11 @@ func TestSRVServiceQuery(t *testing.T) {
 
 func TestServiceVIPReuse(t *testing.T) {
 	skip.If(t, runtime.GOOS == "windows", "test only works on linux")
+	ctx := context.Background()
 
 	defer netnsutils.SetupTestOSContext(t)()
 
-	c, err := New()
+	c, err := New(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -562,10 +566,11 @@ func TestServiceVIPReuse(t *testing.T) {
 
 func TestIpamReleaseOnNetDriverFailures(t *testing.T) {
 	skip.If(t, runtime.GOOS == "windows", "test only works on linux")
+	ctx := context.Background()
 
 	defer netnsutils.SetupTestOSContext(t)()
 
-	c, err := New(OptionBoltdbWithRandomDBFile(t))
+	c, err := New(ctx, OptionBoltdbWithRandomDBFile(t))
 	if err != nil {
 		t.Fatal(err)
 	}

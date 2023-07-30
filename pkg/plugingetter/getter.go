@@ -1,6 +1,7 @@
 package plugingetter // import "github.com/docker/docker/pkg/plugingetter"
 
 import (
+	"context"
 	"net"
 	"time"
 
@@ -45,8 +46,8 @@ type CountedPlugin interface {
 
 // PluginGetter is the interface implemented by Store
 type PluginGetter interface {
-	Get(name, capability string, mode int) (CompatPlugin, error)
-	GetAllByCap(capability string) ([]CompatPlugin, error)
-	GetAllManagedPluginsByCap(apability string) []CompatPlugin
-	Handle(capability string, callback func(string, *plugins.Client))
+	Get(ctx context.Context, name, capability string, mode int) (CompatPlugin, error)
+	GetAllByCap(ctx context.Context, capability string) ([]CompatPlugin, error)
+	GetAllManagedPluginsByCap(capability string) []CompatPlugin
+	Handle(capability string, callback plugins.CallbackFunc)
 }

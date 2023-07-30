@@ -395,6 +395,7 @@ func (daemon *Daemon) createNetwork(cfg *config.Config, create types.NetworkCrea
 }
 
 func (daemon *Daemon) pluginRefCount(driver, capability string, mode int) {
+	ctx := context.TODO()
 	var builtinDrivers []string
 
 	if capability == driverapi.NetworkPluginEndpointType {
@@ -410,9 +411,9 @@ func (daemon *Daemon) pluginRefCount(driver, capability string, mode int) {
 	}
 
 	if daemon.PluginStore != nil {
-		_, err := daemon.PluginStore.Get(driver, capability, mode)
+		_, err := daemon.PluginStore.Get(ctx, driver, capability, mode)
 		if err != nil {
-			log.G(context.TODO()).WithError(err).WithFields(logrus.Fields{"mode": mode, "driver": driver}).Error("Error handling plugin refcount operation")
+			log.G(ctx).WithError(err).WithFields(logrus.Fields{"mode": mode, "driver": driver}).Error("Error handling plugin refcount operation")
 		}
 	}
 }
@@ -476,7 +477,7 @@ func (daemon *Daemon) DisconnectContainerFromNetwork(containerName string, netwo
 
 // GetNetworkDriverList returns the list of plugins drivers
 // registered for network.
-func (daemon *Daemon) GetNetworkDriverList() []string {
+func (daemon *Daemon) GetNetworkDriverList(ctx context.Context) []string {
 	if !daemon.NetworkControllerEnabled() {
 		return nil
 	}

@@ -1,6 +1,7 @@
 package remote
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -74,6 +75,7 @@ func setupPlugin(t *testing.T, name string, mux *http.ServeMux) func() {
 }
 
 func TestGetCapabilities(t *testing.T) {
+	ctx := context.Background()
 	plugin := "test-ipam-driver-capabilities"
 
 	mux := http.NewServeMux()
@@ -85,7 +87,7 @@ func TestGetCapabilities(t *testing.T) {
 		}
 	})
 
-	p, err := plugins.Get(plugin, ipamapi.PluginEndpointType)
+	p, err := plugins.Get(ctx, plugin, ipamapi.PluginEndpointType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,12 +109,13 @@ func TestGetCapabilities(t *testing.T) {
 }
 
 func TestGetCapabilitiesFromLegacyDriver(t *testing.T) {
+	ctx := context.Background()
 	plugin := "test-ipam-legacy-driver"
 
 	mux := http.NewServeMux()
 	defer setupPlugin(t, plugin, mux)()
 
-	p, err := plugins.Get(plugin, ipamapi.PluginEndpointType)
+	p, err := plugins.Get(ctx, plugin, ipamapi.PluginEndpointType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,6 +133,7 @@ func TestGetCapabilitiesFromLegacyDriver(t *testing.T) {
 }
 
 func TestGetDefaultAddressSpaces(t *testing.T) {
+	ctx := context.Background()
 	plugin := "test-ipam-driver-addr-spaces"
 
 	mux := http.NewServeMux()
@@ -142,7 +146,7 @@ func TestGetDefaultAddressSpaces(t *testing.T) {
 		}
 	})
 
-	p, err := plugins.Get(plugin, ipamapi.PluginEndpointType)
+	p, err := plugins.Get(ctx, plugin, ipamapi.PluginEndpointType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,6 +168,7 @@ func TestGetDefaultAddressSpaces(t *testing.T) {
 }
 
 func TestRemoteDriver(t *testing.T) {
+	ctx := context.Background()
 	plugin := "test-ipam-driver"
 
 	mux := http.NewServeMux()
@@ -236,7 +241,7 @@ func TestRemoteDriver(t *testing.T) {
 		return map[string]interface{}{}
 	})
 
-	p, err := plugins.Get(plugin, ipamapi.PluginEndpointType)
+	p, err := plugins.Get(ctx, plugin, ipamapi.PluginEndpointType)
 	if err != nil {
 		t.Fatal(err)
 	}

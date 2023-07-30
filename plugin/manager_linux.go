@@ -113,7 +113,7 @@ func (pm *Manager) pluginPostStart(ctx context.Context, p *v2.Plugin, c *control
 		}
 	}
 	pm.config.Store.SetState(p, true)
-	pm.config.Store.CallHandler(p)
+	pm.config.Store.CallHandler(ctx, p)
 
 	return pm.save(p)
 }

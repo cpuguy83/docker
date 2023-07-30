@@ -28,7 +28,7 @@ import (
 )
 
 // SystemInfo returns information about the host server the daemon is running on.
-func (daemon *Daemon) SystemInfo() *system.Info {
+func (daemon *Daemon) SystemInfo(ctx context.Context) *system.Info {
 	defer metrics.StartTimer(hostInfoFunctions.WithValues("system_info"))()
 
 	sysInfo := daemon.RawSysInfo()
@@ -70,7 +70,7 @@ func (daemon *Daemon) SystemInfo() *system.Info {
 	// Retrieve platform specific info
 	daemon.fillPlatformInfo(v, sysInfo, cfg)
 	daemon.fillDriverInfo(v)
-	daemon.fillPluginsInfo(v, &cfg.Config)
+	daemon.fillPluginsInfo(ctx, v, &cfg.Config)
 	daemon.fillSecurityOptions(v, sysInfo, &cfg.Config)
 	daemon.fillLicense(v)
 	daemon.fillDefaultAddressPools(v, &cfg.Config)
@@ -139,10 +139,10 @@ WARNING: The %s storage-driver is deprecated, and will be removed in a future re
 	fillDriverWarnings(v)
 }
 
-func (daemon *Daemon) fillPluginsInfo(v *system.Info, cfg *config.Config) {
+func (daemon *Daemon) fillPluginsInfo(ctx context.Context, v *system.Info, cfg *config.Config) {
 	v.Plugins = system.PluginsInfo{
 		Volume:  daemon.volumes.GetDriverList(),
-		Network: daemon.GetNetworkDriverList(),
+		Network: daemon.GetNetworkDriverList(ctx),
 
 		// The authorization plugins are returned in the order they are
 		// used as they constitute a request/response modification chain.

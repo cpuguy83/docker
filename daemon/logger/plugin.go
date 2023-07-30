@@ -1,6 +1,7 @@
 package logger // import "github.com/docker/docker/daemon/logger"
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -33,8 +34,8 @@ func RegisterPluginGetter(plugingetter getter.PluginGetter) {
 
 // getPlugin returns a logging driver by its name.
 // If the driver is empty, it looks for the local driver.
-func getPlugin(name string, mode int) (Creator, error) {
-	p, err := pluginGetter.Get(name, extName, mode)
+func getPlugin(ctx context.Context, name string, mode int) (Creator, error) {
+	p, err := pluginGetter.Get(ctx, name, extName, mode)
 	if err != nil {
 		return nil, fmt.Errorf("error looking up logging plugin %s: %v", name, err)
 	}
@@ -43,7 +44,7 @@ func getPlugin(name string, mode int) (Creator, error) {
 	if err != nil {
 		return nil, err
 	}
-	return makePluginCreator(name, client, p.ScopedPath), nil
+	return makePluginCreator(ctx, name, client, p.ScopedPath), nil
 }
 
 func makePluginClient(p getter.CompatPlugin) (logPlugin, error) {
@@ -67,11 +68,11 @@ func makePluginClient(p getter.CompatPlugin) (logPlugin, error) {
 	return &logPluginProxy{c}, nil
 }
 
-func makePluginCreator(name string, l logPlugin, scopePath func(s string) string) Creator {
+func makePluginCreator(ctx context.Context, name string, l logPlugin, scopePath func(s string) string) Creator {
 	return func(logCtx Info) (logger Logger, err error) {
 		defer func() {
 			if err != nil {
-				pluginGetter.Get(name, extName, getter.Release)
+				pluginGetter.Get(ctx, name, extName, getter.Release)
 			}
 		}()
 

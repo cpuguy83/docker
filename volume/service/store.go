@@ -193,7 +193,7 @@ func (s *VolumeStore) purge(ctx context.Context, name string) error {
 	v, exists := s.names[name]
 	if exists {
 		driverName := v.DriverName()
-		if _, err := s.drivers.ReleaseDriver(driverName); err != nil {
+		if _, err := s.drivers.ReleaseDriver(ctx, driverName); err != nil {
 			log.G(ctx).WithError(err).WithField("driver", driverName).Error("Error releasing reference to volume driver")
 		}
 	}
@@ -408,7 +408,7 @@ func (s *VolumeStore) list(ctx context.Context, driverNames ...string) ([]volume
 
 	var dls []volume.Driver
 
-	all, err := s.drivers.GetAllDrivers()
+	all, err := s.drivers.GetAllDrivers(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -532,7 +532,7 @@ func (s *VolumeStore) checkConflict(ctx context.Context, name, driverName string
 	if driverName != "" {
 		// Retrieve canonical driver name to avoid inconsistencies (for example
 		// "plugin" vs. "plugin:latest")
-		vd, err := s.drivers.GetDriver(driverName)
+		vd, err := s.drivers.GetDriver(ctx, driverName)
 		if err != nil {
 			return nil, err
 		}
@@ -617,7 +617,7 @@ func (s *VolumeStore) create(ctx context.Context, name, driverName string, opts,
 	if driverName == "" {
 		driverName = volume.DefaultDriverName
 	}
-	vd, err := s.drivers.CreateDriver(driverName)
+	vd, err := s.drivers.CreateDriver(ctx, driverName)
 	if err != nil {
 		return nil, false, &OpErr{Op: "create", Name: name, Err: err}
 	}
@@ -626,7 +626,7 @@ func (s *VolumeStore) create(ctx context.Context, name, driverName string, opts,
 	if v, _ = vd.Get(name); v == nil {
 		v, err = vd.Create(name, opts)
 		if err != nil {
-			if _, err := s.drivers.ReleaseDriver(driverName); err != nil {
+			if _, err := s.drivers.ReleaseDriver(ctx, driverName); err != nil {
 				log.G(ctx).WithError(err).WithField("driver", driverName).Error("Error releasing reference to volume driver")
 			}
 			return nil, false, err
@@ -724,7 +724,7 @@ func (s *VolumeStore) getVolume(ctx context.Context, name, driverName string) (v
 		}
 
 		var scope string
-		vd, err := s.drivers.GetDriver(meta.Driver)
+		vd, err := s.drivers.GetDriver(ctx, meta.Driver)
 		if err == nil {
 			scope = vd.Scope()
 		}
@@ -732,7 +732,7 @@ func (s *VolumeStore) getVolume(ctx context.Context, name, driverName string) (v
 	}
 
 	log.G(ctx).Debugf("Probing all drivers for volume with name: %s", name)
-	drivers, err := s.drivers.GetAllDrivers()
+	drivers, err := s.drivers.GetAllDrivers(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -766,7 +766,7 @@ func lookupVolume(ctx context.Context, store *drivers.Store, driverName, volumeN
 	if driverName == "" {
 		driverName = volume.DefaultDriverName
 	}
-	vd, err := store.GetDriver(driverName)
+	vd, err := store.GetDriver(ctx, driverName)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error while checking if volume %q exists in driver %q", volumeName, driverName)
 	}
@@ -814,7 +814,7 @@ func (s *VolumeStore) Remove(ctx context.Context, v volume.Volume, rmOpts ...opt
 		return err
 	}
 
-	vd, err := s.drivers.GetDriver(v.DriverName())
+	vd, err := s.drivers.GetDriver(ctx, v.DriverName())
 	if err != nil {
 		return &OpErr{Err: err, Name: v.DriverName(), Op: "remove"}
 	}

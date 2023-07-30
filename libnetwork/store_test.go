@@ -1,6 +1,7 @@
 package libnetwork
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,7 +13,7 @@ import (
 	"github.com/docker/docker/libnetwork/options"
 )
 
-func testLocalBackend(t *testing.T, provider, url string, storeConfig *store.Config) {
+func testLocalBackend(ctx context.Context, t *testing.T, provider, url string, storeConfig *store.Config) {
 	cfgOptions := []config.Option{func(c *config.Config) {
 		c.Scope.Client.Provider = provider
 		c.Scope.Client.Address = url
@@ -23,7 +24,7 @@ func testLocalBackend(t *testing.T, provider, url string, storeConfig *store.Con
 		netlabel.GenericData: options.Generic{},
 	}))
 
-	testController, err := New(cfgOptions...)
+	testController, err := New(ctx, cfgOptions...)
 	if err != nil {
 		t.Fatalf("Error new controller: %v", err)
 	}
@@ -57,7 +58,7 @@ func testLocalBackend(t *testing.T, provider, url string, storeConfig *store.Con
 	testController.Stop()
 
 	// test restore of local store
-	testController, err = New(cfgOptions...)
+	testController, err = New(ctx, cfgOptions...)
 	if err != nil {
 		t.Fatalf("Error creating controller: %v", err)
 	}
@@ -83,14 +84,15 @@ func OptionBoltdbWithRandomDBFile(t *testing.T) config.Option {
 }
 
 func TestMultipleControllersWithSameStore(t *testing.T) {
+	ctx := context.Background()
 	cfgOptions := OptionBoltdbWithRandomDBFile(t)
-	ctrl1, err := New(cfgOptions)
+	ctrl1, err := New(ctx, cfgOptions)
 	if err != nil {
 		t.Fatalf("Error new controller: %v", err)
 	}
 	defer ctrl1.Stop()
 	// Use the same boltdb file without closing the previous controller
-	ctrl2, err := New(cfgOptions)
+	ctrl2, err := New(ctx, cfgOptions)
 	if err != nil {
 		t.Fatalf("Local store must support concurrent controllers")
 	}

@@ -2,6 +2,7 @@ package remote
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -216,6 +217,7 @@ func (test *testEndpoint) AddTableEntry(tableName string, key string, value []by
 }
 
 func TestGetEmptyCapabilities(t *testing.T) {
+	ctx := context.Background()
 	plugin := "test-net-driver-empty-cap"
 
 	mux := http.NewServeMux()
@@ -225,7 +227,7 @@ func TestGetEmptyCapabilities(t *testing.T) {
 		return map[string]interface{}{}
 	})
 
-	p, err := plugins.Get(plugin, driverapi.NetworkPluginEndpointType)
+	p, err := plugins.Get(ctx, plugin, driverapi.NetworkPluginEndpointType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,6 +248,7 @@ func TestGetEmptyCapabilities(t *testing.T) {
 }
 
 func TestGetExtraCapabilities(t *testing.T) {
+	ctx := context.Background()
 	plugin := "test-net-driver-extra-cap"
 
 	mux := http.NewServeMux()
@@ -259,7 +262,7 @@ func TestGetExtraCapabilities(t *testing.T) {
 		}
 	})
 
-	p, err := plugins.Get(plugin, driverapi.NetworkPluginEndpointType)
+	p, err := plugins.Get(ctx, plugin, driverapi.NetworkPluginEndpointType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,6 +287,7 @@ func TestGetExtraCapabilities(t *testing.T) {
 }
 
 func TestGetInvalidCapabilities(t *testing.T) {
+	ctx := context.Background()
 	plugin := "test-net-driver-invalid-cap"
 
 	mux := http.NewServeMux()
@@ -295,7 +299,7 @@ func TestGetInvalidCapabilities(t *testing.T) {
 		}
 	})
 
-	p, err := plugins.Get(plugin, driverapi.NetworkPluginEndpointType)
+	p, err := plugins.Get(ctx, plugin, driverapi.NetworkPluginEndpointType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,6 +320,7 @@ func TestGetInvalidCapabilities(t *testing.T) {
 }
 
 func TestRemoteDriver(t *testing.T) {
+	ctx := context.Background()
 	plugin := "test-net-driver"
 
 	ep := &testEndpoint{
@@ -413,7 +418,7 @@ func TestRemoteDriver(t *testing.T) {
 		return map[string]interface{}{}
 	})
 
-	p, err := plugins.Get(plugin, driverapi.NetworkPluginEndpointType)
+	p, err := plugins.Get(ctx, plugin, driverapi.NetworkPluginEndpointType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,6 +489,7 @@ func TestRemoteDriver(t *testing.T) {
 }
 
 func TestDriverError(t *testing.T) {
+	ctx := context.Background()
 	plugin := "test-net-driver-error"
 
 	mux := http.NewServeMux()
@@ -495,7 +501,7 @@ func TestDriverError(t *testing.T) {
 		}
 	})
 
-	p, err := plugins.Get(plugin, driverapi.NetworkPluginEndpointType)
+	p, err := plugins.Get(ctx, plugin, driverapi.NetworkPluginEndpointType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -512,6 +518,7 @@ func TestDriverError(t *testing.T) {
 }
 
 func TestMissingValues(t *testing.T) {
+	ctx := context.Background()
 	plugin := "test-net-driver-missing"
 
 	mux := http.NewServeMux()
@@ -532,7 +539,7 @@ func TestMissingValues(t *testing.T) {
 		}
 	})
 
-	p, err := plugins.Get(plugin, driverapi.NetworkPluginEndpointType)
+	p, err := plugins.Get(ctx, plugin, driverapi.NetworkPluginEndpointType)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -575,6 +582,7 @@ func (r *rollbackEndpoint) SetIPAddress(ip *net.IPNet) error {
 }
 
 func TestRollback(t *testing.T) {
+	ctx := context.Background()
 	plugin := "test-net-driver-rollback"
 
 	mux := http.NewServeMux()
@@ -597,7 +605,7 @@ func TestRollback(t *testing.T) {
 		return map[string]interface{}{}
 	})
 
-	p, err := plugins.Get(plugin, driverapi.NetworkPluginEndpointType)
+	p, err := plugins.Get(ctx, plugin, driverapi.NetworkPluginEndpointType)
 	if err != nil {
 		t.Fatal(err)
 	}

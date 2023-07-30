@@ -1,6 +1,7 @@
 package plugin // import "github.com/docker/docker/plugin"
 
 import (
+	"context"
 	"testing"
 
 	"github.com/docker/docker/api/types"
@@ -34,6 +35,8 @@ func TestFilterByCapPos(t *testing.T) {
 }
 
 func TestStoreGetPluginNotMatchCapRefs(t *testing.T) {
+	ctx := context.Background()
+
 	s := NewStore()
 	p := v2.Plugin{PluginObj: types.Plugin{Name: "test:latest"}}
 
@@ -45,7 +48,7 @@ func TestStoreGetPluginNotMatchCapRefs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := s.Get("test", "volumedriver", plugingetter.Acquire); err == nil {
+	if _, err := s.Get(ctx, "test", "volumedriver", plugingetter.Acquire); err == nil {
 		t.Fatal("exepcted error when getting plugin that doesn't match the passed in capability")
 	}
 
@@ -54,7 +57,7 @@ func TestStoreGetPluginNotMatchCapRefs(t *testing.T) {
 	}
 
 	p.PluginObj.Enabled = true
-	if _, err := s.Get("test", "volumedriver", plugingetter.Acquire); err == nil {
+	if _, err := s.Get(ctx, "test", "volumedriver", plugingetter.Acquire); err == nil {
 		t.Fatal("exepcted error when getting plugin that doesn't match the passed in capability")
 	}
 

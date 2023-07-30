@@ -184,7 +184,7 @@ func (c *rio) Wait() {
 }
 
 func attachStreamsFunc(stdout, stderr io.WriteCloser) libcontainerdtypes.StdioCallback {
-	return func(iop *cio.DirectIO) (cio.IO, error) {
+	return func(ctx context.Context, iop *cio.DirectIO) (cio.IO, error) {
 		if iop.Stdin != nil {
 			iop.Stdin.Close()
 			// closing stdin shouldn't be needed here, it should never be open

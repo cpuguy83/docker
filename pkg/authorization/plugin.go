@@ -1,6 +1,7 @@
 package authorization // import "github.com/docker/docker/pkg/authorization"
 
 import (
+	"context"
 	"sync"
 
 	"github.com/docker/docker/pkg/plugingetter"
@@ -68,7 +69,8 @@ func (a *authorizationPlugin) SetName(remote string) {
 }
 
 func (a *authorizationPlugin) AuthZRequest(authReq *Request) (*Response, error) {
-	if err := a.initPlugin(); err != nil {
+	ctx := context.TODO()
+	if err := a.initPlugin(ctx); err != nil {
 		return nil, err
 	}
 
@@ -81,7 +83,8 @@ func (a *authorizationPlugin) AuthZRequest(authReq *Request) (*Response, error) 
 }
 
 func (a *authorizationPlugin) AuthZResponse(authReq *Request) (*Response, error) {
-	if err := a.initPlugin(); err != nil {
+	ctx := context.TODO()
+	if err := a.initPlugin(ctx); err != nil {
 		return nil, err
 	}
 
@@ -94,7 +97,7 @@ func (a *authorizationPlugin) AuthZResponse(authReq *Request) (*Response, error)
 }
 
 // initPlugin initializes the authorization plugin if needed
-func (a *authorizationPlugin) initPlugin() error {
+func (a *authorizationPlugin) initPlugin(ctx context.Context) error {
 	// Lazy loading of plugins
 	a.once.Do(func() {
 		if a.plugin == nil {
@@ -102,10 +105,10 @@ func (a *authorizationPlugin) initPlugin() error {
 			var e error
 
 			if pg := GetPluginGetter(); pg != nil {
-				plugin, e = pg.Get(a.name, AuthZApiImplements, plugingetter.Lookup)
+				plugin, e = pg.Get(ctx, a.name, AuthZApiImplements, plugingetter.Lookup)
 				a.SetName(plugin.Name())
 			} else {
-				plugin, e = plugins.Get(a.name, AuthZApiImplements)
+				plugin, e = plugins.Get(ctx, a.name, AuthZApiImplements)
 			}
 			if e != nil {
 				a.initErr = e

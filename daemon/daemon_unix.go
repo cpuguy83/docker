@@ -834,13 +834,13 @@ func configureKernelSecuritySupport(config *config.Config, driverName string) er
 // initNetworkController initializes the libnetwork controller and configures
 // network settings. If there's active sandboxes, configuration changes will not
 // take effect.
-func (daemon *Daemon) initNetworkController(cfg *config.Config, activeSandboxes map[string]interface{}) error {
+func (daemon *Daemon) initNetworkController(ctx context.Context, cfg *config.Config, activeSandboxes map[string]interface{}) error {
 	netOptions, err := daemon.networkOptions(cfg, daemon.PluginStore, activeSandboxes)
 	if err != nil {
 		return err
 	}
 
-	daemon.netController, err = libnetwork.New(netOptions...)
+	daemon.netController, err = libnetwork.New(ctx, netOptions...)
 	if err != nil {
 		return fmt.Errorf("error obtaining controller instance: %v", err)
 	}

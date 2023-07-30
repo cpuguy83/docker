@@ -60,7 +60,7 @@ func (s *systemRouter) swarmStatus() string {
 func (s *systemRouter) getInfo(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	version := httputils.VersionFromContext(ctx)
 	info, _, _ := s.collectSystemInfo.Do(ctx, version, func(ctx context.Context) (*system.Info, error) {
-		info := s.backend.SystemInfo()
+		info := s.backend.SystemInfo(ctx)
 
 		if s.cluster != nil {
 			info.Swarm = s.cluster.Info()

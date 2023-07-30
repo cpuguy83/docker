@@ -376,7 +376,7 @@ func (m *mockBackend) Upgrade(ctx context.Context, ref reference.Named, name str
 	return nil
 }
 
-func (m *mockBackend) Get(name string) (*v2.Plugin, error) {
+func (m *mockBackend) Get(ctx context.Context, name string) (*v2.Plugin, error) {
 	if m.p == nil {
 		return nil, errors.New("not found")
 	}

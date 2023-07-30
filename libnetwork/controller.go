@@ -111,7 +111,7 @@ type Controller struct {
 }
 
 // New creates a new instance of network controller.
-func New(cfgOptions ...config.Option) (*Controller, error) {
+func New(ctx context.Context, cfgOptions ...config.Option) (*Controller, error) {
 	c := &Controller{
 		id:               stringid.GenerateRandomID(),
 		cfg:              config.New(cfgOptions...),
@@ -132,7 +132,7 @@ func New(cfgOptions ...config.Option) (*Controller, error) {
 
 	// External plugins don't need config passed through daemon. They can
 	// bootstrap themselves.
-	if err := remotedriver.Register(&c.drvRegistry, c.cfg.PluginGetter); err != nil {
+	if err := remotedriver.Register(ctx, &c.drvRegistry, c.cfg.PluginGetter); err != nil {
 		return nil, err
 	}
 
@@ -140,7 +140,7 @@ func New(cfgOptions ...config.Option) (*Controller, error) {
 		return nil, err
 	}
 
-	if err := initIPAMDrivers(&c.ipamRegistry, c.cfg.PluginGetter, c.cfg.DefaultAddressPool); err != nil {
+	if err := initIPAMDrivers(ctx, &c.ipamRegistry, c.cfg.PluginGetter, c.cfg.DefaultAddressPool); err != nil {
 		return nil, err
 	}
 
@@ -1057,12 +1057,14 @@ func SandboxKeyWalker(out **Sandbox, key string) SandboxWalker {
 }
 
 func (c *Controller) loadDriver(networkType string) error {
+	ctx := context.TODO()
+
 	var err error
 
 	if pg := c.GetPluginGetter(); pg != nil {
-		_, err = pg.Get(networkType, driverapi.NetworkPluginEndpointType, plugingetter.Lookup)
+		_, err = pg.Get(ctx, networkType, driverapi.NetworkPluginEndpointType, plugingetter.Lookup)
 	} else {
-		_, err = plugins.Get(networkType, driverapi.NetworkPluginEndpointType)
+		_, err = plugins.Get(ctx, networkType, driverapi.NetworkPluginEndpointType)
 	}
 
 	if err != nil {
@@ -1076,12 +1078,13 @@ func (c *Controller) loadDriver(networkType string) error {
 }
 
 func (c *Controller) loadIPAMDriver(name string) error {
+	ctx := context.TODO()
 	var err error
 
 	if pg := c.GetPluginGetter(); pg != nil {
-		_, err = pg.Get(name, ipamapi.PluginEndpointType, plugingetter.Lookup)
+		_, err = pg.Get(ctx, name, ipamapi.PluginEndpointType, plugingetter.Lookup)
 	} else {
-		_, err = plugins.Get(name, ipamapi.PluginEndpointType)
+		_, err = plugins.Get(ctx, name, ipamapi.PluginEndpointType)
 	}
 
 	if err != nil {

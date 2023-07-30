@@ -50,13 +50,13 @@ func NewExecConfig(c *Container) *ExecConfig {
 }
 
 // InitializeStdio is called by libcontainerd to connect the stdio.
-func (c *ExecConfig) InitializeStdio(iop *cio.DirectIO) (cio.IO, error) {
+func (c *ExecConfig) InitializeStdio(ctx context.Context, iop *cio.DirectIO) (cio.IO, error) {
 	c.StreamConfig.CopyToPipe(iop)
 
 	if c.StreamConfig.Stdin() == nil && !c.Tty && runtime.GOOS == "windows" {
 		if iop.Stdin != nil {
 			if err := iop.Stdin.Close(); err != nil {
-				log.G(context.TODO()).Errorf("error closing exec stdin: %+v", err)
+				log.G(ctx).Errorf("error closing exec stdin: %+v", err)
 			}
 		}
 	}

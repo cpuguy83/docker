@@ -31,18 +31,18 @@ func newAllocator(name string, client *plugins.Client) ipamapi.Ipam {
 }
 
 // Register registers a remote ipam when its plugin is activated.
-func Register(cb ipamapi.Registerer, pg plugingetter.PluginGetter) error {
-	newPluginHandler := func(name string, client *plugins.Client) {
+func Register(ctx context.Context, cb ipamapi.Registerer, pg plugingetter.PluginGetter) error {
+	newPluginHandler := func(ctx context.Context, name string, client *plugins.Client) {
 		a := newAllocator(name, client)
 		if cps, err := a.(*allocator).getCapabilities(); err == nil {
 			if err := cb.RegisterIpamDriverWithCapabilities(name, a, cps); err != nil {
-				log.G(context.TODO()).Errorf("error registering remote ipam driver %s due to %v", name, err)
+				log.G(ctx).Errorf("error registering remote ipam driver %s due to %v", name, err)
 			}
 		} else {
-			log.G(context.TODO()).Infof("remote ipam driver %s does not support capabilities", name)
-			log.G(context.TODO()).Debug(err)
+			log.G(ctx).Infof("remote ipam driver %s does not support capabilities", name)
+			log.G(ctx).Debug(err)
 			if err := cb.RegisterIpamDriver(name, a); err != nil {
-				log.G(context.TODO()).Errorf("error registering remote ipam driver %s due to %v", name, err)
+				log.G(ctx).Errorf("error registering remote ipam driver %s due to %v", name, err)
 			}
 		}
 	}
@@ -57,7 +57,7 @@ func Register(cb ipamapi.Registerer, pg plugingetter.PluginGetter) error {
 			if err != nil {
 				return err
 			}
-			newPluginHandler(ap.Name(), client)
+			newPluginHandler(ctx, ap.Name(), client)
 		}
 	}
 	handleFunc(ipamapi.PluginEndpointType, newPluginHandler)

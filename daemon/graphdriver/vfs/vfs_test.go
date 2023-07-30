@@ -5,6 +5,7 @@ package vfs // import "github.com/docker/docker/daemon/graphdriver/vfs"
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -46,6 +47,7 @@ func TestVfsTeardown(t *testing.T) {
 }
 
 func TestXattrUnsupportedByBackingFS(t *testing.T) {
+	ctx := context.Background()
 	rootdir := t.TempDir()
 	// The ramfs filesystem is unconditionally compiled into the kernel,
 	// and does not support extended attributes.
@@ -92,7 +94,7 @@ func TestXattrUnsupportedByBackingFS(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			subdir := filepath.Join(rootdir, tt.name)
 			assert.NilError(t, os.Mkdir(subdir, 0o755))
-			d, err := graphdriver.GetDriver("vfs", nil,
+			d, err := graphdriver.GetDriver(ctx, "vfs", nil,
 				graphdriver.Options{DriverOptions: tt.opts, Root: subdir})
 			assert.NilError(t, err)
 			defer d.Cleanup()

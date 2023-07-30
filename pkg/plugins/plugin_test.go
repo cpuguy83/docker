@@ -2,6 +2,7 @@ package plugins // import "github.com/docker/docker/pkg/plugins"
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -32,7 +33,7 @@ func TestPluginAddHandler(t *testing.T) {
 	storage.plugins["qwerty"] = p
 
 	testActive(t, p)
-	Handle("bananas", func(_ string, _ *Client) {})
+	Handle("bananas", func(_ context.Context, _ string, _ *Client) {})
 	testActive(t, p)
 }
 
@@ -60,12 +61,14 @@ func testActive(t *testing.T, p *Plugin) {
 
 func TestGet(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
+
 	p := &Plugin{name: fruitPlugin, activateWait: sync.NewCond(&sync.Mutex{})}
 	p.Manifest = &Manifest{Implements: []string{fruitImplements}}
 	storage.plugins[fruitPlugin] = p
 
 	t.Run("success", func(t *testing.T) {
-		plugin, err := Get(fruitPlugin, fruitImplements)
+		plugin, err := Get(ctx, fruitPlugin, fruitImplements)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -82,19 +85,21 @@ func TestGet(t *testing.T) {
 
 	// check negative case where plugin fruit doesn't implement banana
 	t.Run("not implemented", func(t *testing.T) {
-		_, err := Get("fruit", "banana")
+		_, err := Get(ctx, "fruit", "banana")
 		assert.Assert(t, errors.Is(err, ErrNotImplements))
 	})
 
 	// check negative case where plugin vegetable doesn't exist
 	t.Run("not exists", func(t *testing.T) {
-		_, err := Get("vegetable", "potato")
+		_, err := Get(ctx, "vegetable", "potato")
 		assert.Assert(t, errors.Is(err, ErrNotFound))
 	})
 }
 
 func TestPluginWithNoManifest(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
+
 	mux, addr := setupRemotePluginServer(t)
 
 	m := Manifest{[]string{fruitImplements}}
@@ -122,7 +127,7 @@ func TestPluginWithNoManifest(t *testing.T) {
 	}
 	storage.plugins[fruitPlugin] = p
 
-	plugin, err := Get(fruitPlugin, fruitImplements)
+	plugin, err := Get(ctx, fruitPlugin, fruitImplements)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,6 +138,8 @@ func TestPluginWithNoManifest(t *testing.T) {
 
 func TestGetAll(t *testing.T) {
 	t.Parallel()
+	ctx := context.Background()
+
 	tmpdir := t.TempDir()
 	r := LocalRegistry{
 		socketsPath: tmpdir,
@@ -156,7 +163,7 @@ func TestGetAll(t *testing.T) {
 	plugin.Manifest = &Manifest{Implements: []string{"apple"}}
 	storage.plugins["example"] = plugin
 
-	fetchedPlugins, err := r.GetAll("apple")
+	fetchedPlugins, err := r.GetAll(ctx, "apple")
 	if err != nil {
 		t.Fatal(err)
 	}

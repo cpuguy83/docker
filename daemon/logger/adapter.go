@@ -65,20 +65,22 @@ func (a *pluginAdapter) Close() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
+	ctx := context.TODO()
+
 	if err := a.plugin.StopLogging(filepath.Join("/", "run", "docker", "logging", a.id)); err != nil {
 		return err
 	}
 
 	if err := a.stream.Close(); err != nil {
-		log.G(context.TODO()).WithError(err).Error("error closing plugin fifo")
+		log.G(ctx).WithError(err).Error("error closing plugin fifo")
 	}
 	if err := os.Remove(a.fifoPath); err != nil && !os.IsNotExist(err) {
-		log.G(context.TODO()).WithError(err).Error("error cleaning up plugin fifo")
+		log.G(ctx).WithError(err).Error("error cleaning up plugin fifo")
 	}
 
 	// may be nil, especially for unit tests
 	if pluginGetter != nil {
-		pluginGetter.Get(a.Name(), extName, plugingetter.Release)
+		pluginGetter.Get(ctx, a.Name(), extName, plugingetter.Release)
 	}
 	return nil
 }

@@ -46,12 +46,12 @@ type plugins struct {
 
 type extpointHandlers struct {
 	sync.RWMutex
-	extpointHandlers map[string][]func(string, *Client)
+	extpointHandlers map[string][]CallbackFunc
 }
 
 var (
 	storage  = plugins{plugins: make(map[string]*Plugin)}
-	handlers = extpointHandlers{extpointHandlers: make(map[string][]func(string, *Client))}
+	handlers = extpointHandlers{extpointHandlers: make(map[string][]CallbackFunc)}
 )
 
 // Manifest lists what a plugin implements.
@@ -118,18 +118,18 @@ func NewLocalPlugin(name, addr string) *Plugin {
 	}
 }
 
-func (p *Plugin) activate() error {
+func (p *Plugin) activate(ctx context.Context) error {
 	p.activateWait.L.Lock()
 
 	if p.activated() {
-		p.runHandlers()
+		p.runHandlers(ctx)
 		p.activateWait.L.Unlock()
 		return p.activateErr
 	}
 
 	p.activateErr = p.activateWithLock()
 
-	p.runHandlers()
+	p.runHandlers(ctx)
 	p.activateWait.L.Unlock()
 	p.activateWait.Broadcast()
 	return p.activateErr
@@ -137,7 +137,7 @@ func (p *Plugin) activate() error {
 
 // runHandlers runs the registered handlers for the implemented plugin types
 // This should only be run after activation, and while the activation lock is held.
-func (p *Plugin) runHandlers() {
+func (p *Plugin) runHandlers(ctx context.Context) {
 	if !p.activated() {
 		return
 	}
@@ -150,7 +150,7 @@ func (p *Plugin) runHandlers() {
 				continue
 			}
 			for _, handler := range hdlrs {
-				handler(p.name, p.client)
+				handler(ctx, p.name, p.client)
 			}
 		}
 		p.handlersRun = true
@@ -201,7 +201,7 @@ func (p *Plugin) implements(kind string) bool {
 	return false
 }
 
-func loadWithRetry(name string, retry bool) (*Plugin, error) {
+func loadWithRetry(ctx context.Context, name string, retry bool) (*Plugin, error) {
 	registry := NewLocalRegistry()
 	start := time.Now()
 
@@ -218,7 +218,7 @@ func loadWithRetry(name string, retry bool) (*Plugin, error) {
 				return nil, err
 			}
 			retries++
-			log.G(context.TODO()).Warnf("Unable to locate plugin: %s, retrying in %v", name, timeOff)
+			log.G(ctx).Warnf("Unable to locate plugin: %s, retrying in %v", name, timeOff)
 			time.Sleep(timeOff)
 			continue
 		}
@@ -226,12 +226,12 @@ func loadWithRetry(name string, retry bool) (*Plugin, error) {
 		storage.Lock()
 		if pl, exists := storage.plugins[name]; exists {
 			storage.Unlock()
-			return pl, pl.activate()
+			return pl, pl.activate(ctx)
 		}
 		storage.plugins[name] = pl
 		storage.Unlock()
 
-		err = pl.activate()
+		err = pl.activate(ctx)
 
 		if err != nil {
 			storage.Lock()
@@ -243,38 +243,42 @@ func loadWithRetry(name string, retry bool) (*Plugin, error) {
 	}
 }
 
-func get(name string) (*Plugin, error) {
+func get(ctx context.Context, name string) (*Plugin, error) {
 	storage.Lock()
 	pl, ok := storage.plugins[name]
 	storage.Unlock()
 	if ok {
-		return pl, pl.activate()
+		return pl, pl.activate(ctx)
 	}
-	return loadWithRetry(name, true)
+	return loadWithRetry(ctx, name, true)
 }
 
 // Get returns the plugin given the specified name and requested implementation.
-func Get(name, imp string) (*Plugin, error) {
+func Get(ctx context.Context, name, imp string) (*Plugin, error) {
 	if name == "" {
 		return nil, errors.New("Unable to find plugin without name")
 	}
-	pl, err := get(name)
+	pl, err := get(ctx, name)
 	if err != nil {
 		return nil, err
 	}
+	// TODO: Handle cancellation of waitActive
 	if err := pl.waitActive(); err == nil && pl.implements(imp) {
-		log.G(context.TODO()).Debugf("%s implements: %s", name, imp)
+		log.G(ctx).Debugf("%s implements: %s", name, imp)
 		return pl, nil
 	}
 	return nil, fmt.Errorf("%w: plugin=%q, requested implementation=%q", ErrNotImplements, name, imp)
 }
 
+// CallbackFunc is a function that is called when a plugin is activated
+type CallbackFunc func(context.Context, string, *Client)
+
 // Handle adds the specified function to the extpointHandlers.
-func Handle(iface string, fn func(string, *Client)) {
+func Handle(iface string, fn CallbackFunc) {
 	handlers.Lock()
 	hdlrs, ok := handlers.extpointHandlers[iface]
 	if !ok {
-		hdlrs = []func(string, *Client){}
+		hdlrs = []CallbackFunc{}
 	}
 
 	hdlrs = append(hdlrs, fn)
@@ -294,7 +298,7 @@ func Handle(iface string, fn func(string, *Client)) {
 }
 
 // GetAll returns all the plugins for the specified implementation
-func (l *LocalRegistry) GetAll(imp string) ([]*Plugin, error) {
+func (l *LocalRegistry) GetAll(ctx context.Context, imp string) ([]*Plugin, error) {
 	pluginNames, err := l.Scan()
 	if err != nil {
 		return nil, err
@@ -319,7 +323,7 @@ func (l *LocalRegistry) GetAll(imp string) ([]*Plugin, error) {
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
-			pl, err := loadWithRetry(name, false)
+			pl, err := loadWithRetry(ctx, name, false)
 			chPl <- &plLoad{pl, err}
 		}(name)
 	}
@@ -330,7 +334,7 @@ func (l *LocalRegistry) GetAll(imp string) ([]*Plugin, error) {
 	var out []*Plugin
 	for pl := range chPl {
 		if pl.err != nil {
-			log.G(context.TODO()).Error(pl.err)
+			log.G(ctx).Error(pl.err)
 			continue
 		}
 		if err := pl.pl.waitActive(); err == nil && pl.pl.implements(imp) {

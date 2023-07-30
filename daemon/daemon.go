@@ -240,6 +240,7 @@ type layerAccessor interface {
 }
 
 func (daemon *Daemon) restore(cfg *configStore) error {
+	ctx := context.TODO()
 	var mapLock sync.Mutex
 	containers := make(map[string]*container.Container)
 
@@ -517,7 +518,7 @@ func (daemon *Daemon) restore(cfg *configStore) error {
 	//
 	// Note that we cannot initialize the network controller earlier, as it
 	// needs to know if there's active sandboxes (running containers).
-	if err = daemon.initNetworkController(&cfg.Config, activeSandboxes); err != nil {
+	if err = daemon.initNetworkController(ctx, &cfg.Config, activeSandboxes); err != nil {
 		return fmt.Errorf("Error initializing network controller: %v", err)
 	}
 
@@ -1051,7 +1052,7 @@ func NewDaemon(ctx context.Context, config *config.Config, pluginStore *plugin.S
 			RefCountMounter: snapshotter.NewMounter(config.Root, driverName, idMapping),
 		})
 	} else {
-		layerStore, err := layer.NewStoreFromOptions(layer.StoreOptions{
+		layerStore, err := layer.NewStoreFromOptions(ctx, layer.StoreOptions{
 			Root:                      cfgStore.Root,
 			MetadataStorePathTemplate: filepath.Join(cfgStore.Root, "image", "%s", "layerdb"),
 			GraphDriver:               driverName,
@@ -1151,7 +1152,7 @@ func NewDaemon(ctx context.Context, config *config.Config, pluginStore *plugin.S
 	}
 	close(d.startupDone)
 
-	info := d.SystemInfo()
+	info := d.SystemInfo(ctx)
 	for _, w := range info.Warnings {
 		log.G(ctx).Warn(w)
 	}

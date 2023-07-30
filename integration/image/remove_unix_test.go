@@ -43,7 +43,7 @@ func TestRemoveImageGarbageCollector(t *testing.T) {
 	ctx := context.Background()
 	client := d.NewClientT(t)
 
-	layerStore, _ := layer.NewStoreFromOptions(layer.StoreOptions{
+	layerStore, _ := layer.NewStoreFromOptions(ctx, layer.StoreOptions{
 		Root:                      d.Root,
 		MetadataStorePathTemplate: filepath.Join(d.RootDir(), "image", "%s", "layerdb"),
 		GraphDriver:               d.StorageDriver(),

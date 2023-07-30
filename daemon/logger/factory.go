@@ -1,6 +1,7 @@
 package logger // import "github.com/docker/docker/daemon/logger"
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"sync"
@@ -40,8 +41,8 @@ func ListDrivers() []string {
 	return factory.list()
 }
 
-func (lf *logdriverFactory) register(name string, c Creator) error {
-	registered, err := lf.driverRegistered(name)
+func (lf *logdriverFactory) register(ctx context.Context, name string, c Creator) error {
+	registered, err := lf.driverRegistered(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -55,13 +56,13 @@ func (lf *logdriverFactory) register(name string, c Creator) error {
 	return nil
 }
 
-func (lf *logdriverFactory) driverRegistered(name string) (bool, error) {
+func (lf *logdriverFactory) driverRegistered(ctx context.Context, name string) (bool, error) {
 	lf.m.Lock()
 	_, ok := lf.registry[name]
 	lf.m.Unlock()
 	if !ok {
 		if pluginGetter != nil { // this can be nil when the init functions are running
-			l, err := getPlugin(name, plugingetter.Lookup)
+			l, err := getPlugin(ctx, name, plugingetter.Lookup)
 			if err != nil {
 				return false, err
 			}
@@ -84,7 +85,7 @@ func (lf *logdriverFactory) registerLogOptValidator(name string, l LogOptValidat
 	return nil
 }
 
-func (lf *logdriverFactory) get(name string) (Creator, error) {
+func (lf *logdriverFactory) get(ctx context.Context, name string) (Creator, error) {
 	lf.m.Lock()
 	defer lf.m.Unlock()
 
@@ -93,7 +94,7 @@ func (lf *logdriverFactory) get(name string) (Creator, error) {
 		return c, nil
 	}
 
-	c, err := getPlugin(name, plugingetter.Acquire)
+	c, err := getPlugin(ctx, name, plugingetter.Acquire)
 	return c, errors.Wrapf(err, "logger: no log driver named '%s' is registered", name)
 }
 
@@ -110,7 +111,8 @@ var factory = &logdriverFactory{registry: make(map[string]Creator), optValidator
 // RegisterLogDriver registers the given logging driver builder with given logging
 // driver name.
 func RegisterLogDriver(name string, c Creator) error {
-	return factory.register(name, c)
+	ctx := context.TODO()
+	return factory.register(ctx, name, c)
 }
 
 // RegisterLogOptValidator registers the logging option validator with
@@ -120,8 +122,8 @@ func RegisterLogOptValidator(name string, l LogOptValidator) error {
 }
 
 // GetLogDriver provides the logging driver builder for a logging driver name.
-func GetLogDriver(name string) (Creator, error) {
-	return factory.get(name)
+func GetLogDriver(ctx context.Context, name string) (Creator, error) {
+	return factory.get(ctx, name)
 }
 
 var builtInLogOpts = map[string]bool{
@@ -136,6 +138,7 @@ func ValidateLogOpts(name string, cfg map[string]string) error {
 		return nil
 	}
 
+	ctx := context.TODO()
 	switch containertypes.LogMode(cfg["mode"]) {
 	case containertypes.LogModeBlocking, containertypes.LogModeNonBlock, containertypes.LogModeUnset:
 	default:
@@ -155,7 +158,7 @@ func ValidateLogOpts(name string, cfg map[string]string) error {
 		return err
 	}
 
-	registered, err := factory.driverRegistered(name)
+	registered, err := factory.driverRegistered(ctx, name)
 	if err != nil {
 		return err
 	}
