@@ -78,6 +78,92 @@ func TestWriteLog(t *testing.T) {
 	assert.Check(t, is.DeepEqual(testProto, proto), "expected:\n%+v\ngot:\n%+v", testProto, proto)
 }
 
+func TestConcurrentWrite(t *testing.T) {
+	t.Parallel()
+
+	dir, err := os.MkdirTemp("", t.Name())
+	assert.NilError(t, err)
+	defer os.RemoveAll(dir)
+
+	logPath := filepath.Join(dir, "test.log")
+
+	l, err := New(logger.Info{LogPath: logPath})
+	assert.NilError(t, err)
+	defer l.Close()
+
+	msgTime := time.Now()
+
+	newMessage := func() *logger.Message {
+		msg := logger.NewMessage()
+		msg.Line = []byte("hello world")
+		msg.Timestamp = msgTime
+		msg.Source = "test"
+		return msg
+	}
+
+	perStream := 10000
+	writeStream := func() <-chan error {
+		chErr := make(chan error)
+
+		go func() {
+			defer close(chErr)
+			for i := 0; i < perStream; i++ {
+				time.Sleep(5 * time.Microsecond)
+				msg := newMessage()
+				err := l.Log(msg)
+				if err != nil {
+					chErr <- err
+					return
+				}
+			}
+		}()
+		return chErr
+	}
+
+	var streams []<-chan error
+
+	numStreams := 100
+	for i := 0; i < numStreams; i++ {
+		streams = append(streams, writeStream())
+	}
+
+	for _, chErr := range streams {
+		assert.NilError(t, <-chErr)
+	}
+
+	lw := l.(*driver).ReadLogs(logger.ReadConfig{Tail: perStream})
+	defer lw.ConsumerGone()
+
+	timer := time.NewTimer(5 * time.Second)
+	defer timer.Stop()
+
+	for count := 0; count < perStream; count++ {
+		if !timer.Stop() {
+			<-timer.C
+		}
+		timer.Reset(5 * time.Second)
+		select {
+		case <-timer.C:
+			t.Fatal("timeout waiting for log messages")
+		case msg, ok := <-lw.Msg:
+			if !ok {
+				break
+			}
+
+			assert.Check(t, is.Equal(msg.Source, "test"))
+			assert.Check(t, is.Equal(string(msg.Line), "hello world\n"))
+			assert.Check(t, is.Equal(msg.Timestamp.UnixNano(), msgTime.UnixNano()))
+			logger.PutMessage(msg)
+
+			if t.Failed() {
+				break
+			}
+		case err := <-lw.Err:
+			assert.NilError(t, err)
+		}
+	}
+}
+
 func TestReadLog(t *testing.T) {
 	r := loggertest.Reader{
 		Factory: func(t *testing.T, info logger.Info) func(*testing.T) logger.Logger {
