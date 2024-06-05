@@ -16,6 +16,7 @@ import (
 	"github.com/docker/docker/daemon/logger"
 	"github.com/docker/docker/pkg/tailfile"
 	"gotest.tools/v3/assert"
+	"gotest.tools/v3/assert/cmp"
 	"gotest.tools/v3/poll"
 )
 
@@ -52,11 +53,19 @@ func TestTailFiles(t *testing.T) {
 	s2 := strings.NewReader("I'm serious.\nDon't call me Shirley!\n")
 	s3 := strings.NewReader("Roads?\nWhere we're going we don't need roads.\n")
 
-	files := []SizeReaderAt{s1, s2, s3}
+	makeLZO := func(ls ...SizeReaderAt) []fileOpener {
+		out := make([]fileOpener, 0, len(ls))
+		for _, rdr := range ls {
+			out = append(out, &sizeReaderAtOpener{rdr})
+		}
+		return out
+	}
+
+	files := makeLZO(s1, s2, s3)
 	watcher := logger.NewLogWatcher()
 	defer watcher.ConsumerGone()
 
-	tailReader := func(ctx context.Context, r SizeReaderAt, lines int) (io.Reader, int, error) {
+	tailReader := func(ctx context.Context, r SizeReaderAt, lines int) (SizeReaderAt, int, error) {
 		return tailfile.NewTailReader(ctx, r, lines)
 	}
 	dec := &testDecoder{}
@@ -116,7 +125,7 @@ func TestCheckCapacityAndRotate(t *testing.T) {
 	dir := t.TempDir()
 
 	logPath := filepath.Join(dir, "log")
-	getTailReader := func(ctx context.Context, r SizeReaderAt, lines int) (io.Reader, int, error) {
+	getTailReader := func(ctx context.Context, r SizeReaderAt, lines int) (SizeReaderAt, int, error) {
 		return tailfile.NewTailReader(ctx, r, lines)
 	}
 	createDecoder := func(io.Reader) Decoder {
@@ -232,4 +241,39 @@ func checkFileExists(name string) poll.Check {
 			return poll.Error(err)
 		}
 	}
+}
+
+func TestRefCounter(t *testing.T) {
+	var ctr refCounter
+
+	dec := ctr.Inc("key1")
+	assert.Assert(t, dec())
+	assert.Assert(t, cmp.Len(ctr.counts, 0))
+
+	dec1 := ctr.Inc("key1")
+	// Take the same key again
+	dec2 := ctr.Inc("key1")
+	// And another key
+	dec3 := ctr.Inc("key2")
+
+	assert.Assert(t, cmp.Len(ctr.counts, 2))
+	assert.Assert(t, cmp.Equal(ctr.counts["key1"], 2))
+	assert.Assert(t, cmp.Equal(ctr.counts["key2"], 1))
+
+	assert.Assert(t, !dec1(), "decrement should return false when it is still referenced")
+	assert.Assert(t, cmp.Panics(func() { dec1() }), "calling the same decrementer more than once should panic")
+	assert.Assert(t, cmp.Len(ctr.counts, 2))
+	assert.Assert(t, cmp.Equal(ctr.counts["key1"], 1), "ref count should decrement")
+	assert.Assert(t, cmp.Equal(ctr.counts["key2"], 1), "ref count for other keys should remain the same")
+
+	assert.Assert(t, dec2(), "decrement should return true when all references are called")
+	assert.Assert(t, cmp.Panics(func() { dec2() }), "calling the same decrementer more than once should panic")
+	assert.Assert(t, cmp.Equal(ctr.counts["key1"], 0), "ref count should decrement")
+	assert.Assert(t, cmp.Equal(ctr.counts["key2"], 1), "ref count for other keys should remain the same")
+	assert.Assert(t, cmp.Len(ctr.counts, 1))
+
+	assert.Assert(t, dec3(), "decrement should return true when all references are called")
+	assert.Assert(t, cmp.Equal(ctr.counts["key2"], 0), "ref count should decrement")
+	assert.Assert(t, cmp.Len(ctr.counts, 0))
+	assert.Assert(t, cmp.Panics(func() { dec3() }), "calling the same decrementer more than once should panic")
 }
