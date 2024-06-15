@@ -82,7 +82,9 @@ func (daemon *Daemon) SystemInfo(ctx context.Context) (*system.Info, error) {
 
 	daemon.fillContainerStates(v)
 	daemon.fillDebugInfo(ctx, v)
+	daemon.fillContainerdInfo(v, &cfg.Config)
 	daemon.fillAPIInfo(v, &cfg.Config)
+
 	// Retrieve platform specific info
 	if err := daemon.fillPlatformInfo(ctx, v, sysInfo, cfg); err != nil {
 		return nil, err
@@ -228,15 +230,20 @@ func (daemon *Daemon) fillDebugInfo(ctx context.Context, v *system.Info) {
 	v.NGoroutines = runtime.NumGoroutine()
 	v.NEventsListener = daemon.EventsService.SubscribersCount()
 
-	config := daemon.Config()
-	if config.ContainerdAddr != "" {
-		v.Containerd = &system.ContainerdInfo{
-			Address: config.ContainerdAddr,
-			Namespaces: system.ContainerdNamespaces{
-				Containers: config.ContainerdNamespace,
-				Plugins:    config.ContainerdPluginNamespace,
-			},
-		}
+}
+
+// fillContainerdInfo provides information about the containerd configuration
+// for debugging purposes.
+func (daemon *Daemon) fillContainerdInfo(v *system.Info, cfg *config.Config) {
+	if cfg.ContainerdAddr == "" {
+		return
+	}
+	v.Containerd = &system.ContainerdInfo{
+		Address: cfg.ContainerdAddr,
+		Namespaces: system.ContainerdNamespaces{
+			Containers: cfg.ContainerdNamespace,
+			Plugins:    cfg.ContainerdPluginNamespace,
+		},
 	}
 }
 
