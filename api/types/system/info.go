@@ -96,9 +96,32 @@ type ContainerdInfo struct {
 }
 
 // ContainerdNamespaces reflects the containerd namespaces used by the daemon.
+//
+// These namespaces can be configured in the daemon configuration, and are
+// considered to be used exclusively by the daemon,
+//
+// As these namespaces are considered to be exclusively accessed
+// by the daemon, it is not recommended to change these values,
+// or to change them to a value that is used by other systems,
+// such as cri-containerd.
 type ContainerdNamespaces struct {
+	// Containers holds the default containerd namespace used for
+	// containers managed by the daemon.
+	//
+	// The default namespace for containers is "moby", but will be
+	// suffixed with the `<uid>.<gid>` of the remapped `root` if
+	// user-namespaces are enabled and the containerd image-store
+	// is used.
 	Containers string
-	Plugins    string
+
+	// Plugins holds the default containerd namespace used for
+	// plugins managed by the daemon.
+	//
+	// The default namespace for plugins is "moby", but will be
+	// suffixed with the `<uid>.<gid>` of the remapped `root` if
+	// user-namespaces are enabled and the containerd image-store
+	// is used.
+	Plugins string
 }
 
 type legacyFields struct {
