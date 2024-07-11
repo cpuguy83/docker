@@ -963,7 +963,7 @@ func (s *containerRouter) postContainersAttach(ctx context.Context, w http.Respo
 		MuxStreams: true,
 	}
 
-	if err = s.backend.ContainerAttach(containerName, attachConfig); err != nil {
+	if err = s.backend.ContainerAttach(ctx, containerName, attachConfig); err != nil {
 		log.G(ctx).WithError(err).Errorf("Handler for %s %s returned error", r.Method, r.URL.Path)
 		// Remember to close stream if error happens
 		conn, _, errHijack := hijacker.Hijack()
@@ -1035,7 +1035,7 @@ func (s *containerRouter) wsContainersAttach(ctx context.Context, w http.Respons
 		MuxStreams: false, // never multiplex, as we rely on websocket to manage distinct streams
 	}
 
-	err = s.backend.ContainerAttach(containerName, attachConfig)
+	err = s.backend.ContainerAttach(ctx, containerName, attachConfig)
 	close(done)
 	select {
 	case <-started:
