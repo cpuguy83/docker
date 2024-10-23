@@ -12,6 +12,7 @@ import (
 	"github.com/containerd/containerd/content/local"
 	ctdmetadata "github.com/containerd/containerd/metadata"
 	"github.com/containerd/containerd/snapshots"
+	"github.com/containerd/containerd/tracing"
 	"github.com/containerd/log"
 	"github.com/containerd/platforms"
 	"github.com/docker/docker/api/types"
@@ -48,7 +49,7 @@ import (
 	"github.com/moby/buildkit/util/archutil"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/moby/buildkit/util/network/netproviders"
-	"github.com/moby/buildkit/util/tracing"
+	bktracing "github.com/moby/buildkit/util/tracing"
 	"github.com/moby/buildkit/util/tracing/detect"
 	"github.com/moby/buildkit/worker"
 	"github.com/moby/buildkit/worker/containerd"
@@ -60,14 +61,18 @@ import (
 )
 
 func newController(ctx context.Context, rt http.RoundTripper, opt Opt) (*control.Controller, error) {
+	ctx, span := tracing.StartSpan(ctx, "builder.newController")
+	defer span.End()
 	if opt.UseSnapshotter {
+		span.SetAttributes(tracing.Attribute("storage", "snapshotter"))
 		return newSnapshotterController(ctx, rt, opt)
 	}
+	span.SetAttributes(tracing.Attribute("storage", "graphdriver"))
 	return newGraphDriverController(ctx, rt, opt)
 }
 
 func getTraceExporter(ctx context.Context) trace.SpanExporter {
-	tc := make(tracing.MultiSpanExporter, 0, 2)
+	tc := make(bktracing.MultiSpanExporter, 0, 2)
 	if detect.Recorder != nil {
 		tc = append(tc, detect.Recorder)
 	}
@@ -142,12 +147,14 @@ func newSnapshotterController(ctx context.Context, rt http.RoundTripper, opt Opt
 	wo.RegistryHosts = opt.RegistryHosts
 	wo.Labels = getLabels(opt, wo.Labels)
 
-	exec, err := newExecutor(opt.Root, opt.DefaultCgroupParent, opt.NetworkController, dns, opt.Rootless, opt.IdentityMapping, opt.ApparmorProfile)
+	log.G(ctx).Debug("create buildkit executor")
+	exec, err := newExecutor(ctx, opt.Root, opt.DefaultCgroupParent, opt.NetworkController, dns, opt.Rootless, opt.IdentityMapping, opt.ApparmorProfile)
 	if err != nil {
 		return nil, err
 	}
 	wo.Executor = exec
 
+	log.G(ctx).Debug("create buildkit containerd worker")
 	w, err := mobyworker.NewContainerdWorker(ctx, wo, opt.Callbacks)
 	if err != nil {
 		return nil, err
@@ -160,6 +167,7 @@ func newSnapshotterController(ctx context.Context, rt http.RoundTripper, opt Opt
 		return nil, err
 	}
 
+	log.G(ctx).Debug("Create buildkit gateway frontend")
 	gwf, err := gateway.NewGatewayFrontend(wc.Infos(), nil)
 	if err != nil {
 		return nil, err
@@ -315,7 +323,7 @@ func newGraphDriverController(ctx context.Context, rt http.RoundTripper, opt Opt
 
 	dns := getDNSConfig(opt.DNSConfig)
 
-	exec, err := newExecutor(root, opt.DefaultCgroupParent, opt.NetworkController, dns, opt.Rootless, opt.IdentityMapping, opt.ApparmorProfile)
+	exec, err := newExecutor(ctx, root, opt.DefaultCgroupParent, opt.NetworkController, dns, opt.Rootless, opt.IdentityMapping, opt.ApparmorProfile)
 	if err != nil {
 		return nil, err
 	}

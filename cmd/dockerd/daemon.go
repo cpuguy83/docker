@@ -105,6 +105,29 @@ func newDaemonCLI(opts *daemonOptions) (*daemonCLI, error) {
 }
 
 func (cli *daemonCLI) start(ctx context.Context) (err error) {
+	setOTLPProtoDefault()
+
+	const otelServiceNameEnv = "OTEL_SERVICE_NAME"
+	if _, ok := os.LookupEnv(otelServiceNameEnv); !ok {
+		os.Setenv(otelServiceNameEnv, filepath.Base(os.Args[0]))
+	}
+
+	// Initialize the trace recorder for buildkit.
+	detect.Recorder = detect.NewTraceRecorder()
+
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	tp := newTracerProvider(ctx)
+	otel.SetTracerProvider(tp)
+	log.G(ctx).Logger.AddHook(tracing.NewLogrusHook())
+
+	ctx, span := tracing.StartSpan(ctx, "daemon.start")
+	defer func() {
+		if err != nil {
+			span.SetStatus(err)
+			span.End()
+		}
+	}()
+
 	configureProxyEnv(cli.Config)
 	configureDaemonLogs(cli.Config)
 
@@ -177,7 +200,7 @@ func (cli *daemonCLI) start(ctx context.Context) (err error) {
 		return errors.Wrap(err, "failed to load listeners")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	waitForContainerDShutdown, err := cli.initContainerd(ctx)
 	if waitForContainerDShutdown != nil {
 		defer waitForContainerDShutdown(10 * time.Second)
@@ -191,7 +214,7 @@ func (cli *daemonCLI) start(ctx context.Context) (err error) {
 	httpServer := &http.Server{
 		ReadHeaderTimeout: 5 * time.Minute, // "G112: Potential Slowloris Attack (gosec)"; not a real concern for our use, so setting a long timeout.
 	}
-	apiShutdownCtx, apiShutdownCancel := context.WithCancel(context.Background())
+	apiShutdownCtx, apiShutdownCancel := context.WithCancel(context.WithoutCancel(ctx))
 	apiShutdownDone := make(chan struct{})
 	trap.Trap(cli.stop)
 	go func() {
@@ -226,25 +249,11 @@ func (cli *daemonCLI) start(ctx context.Context) (err error) {
 		}
 	}()
 
+	defer span.End()
 	// Notify that the API is active, but before daemon is set up.
 	if err := preNotifyReady(); err != nil {
 		return err
 	}
-
-	const otelServiceNameEnv = "OTEL_SERVICE_NAME"
-	if _, ok := os.LookupEnv(otelServiceNameEnv); !ok {
-		os.Setenv(otelServiceNameEnv, filepath.Base(os.Args[0]))
-	}
-
-	setOTLPProtoDefault()
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-
-	// Initialize the trace recorder for buildkit.
-	detect.Recorder = detect.NewTraceRecorder()
-
-	tp := newTracerProvider(ctx)
-	otel.SetTracerProvider(tp)
-	log.G(ctx).Logger.AddHook(tracing.NewLogrusHook())
 
 	pluginStore := plugin.NewStore()
 
@@ -284,7 +293,7 @@ func (cli *daemonCLI) start(ctx context.Context) (err error) {
 
 	c, err := createAndStartCluster(cli, d)
 	if err != nil {
-		log.G(ctx).Fatalf("Error starting cluster component: %v", err)
+		return errors.Wrap(err, "error starting cluster component")
 	}
 
 	// Restart all autostart containers which has a swarm endpoint
@@ -292,10 +301,7 @@ func (cli *daemonCLI) start(ctx context.Context) (err error) {
 	// initialized the cluster.
 	d.RestartSwarmContainers()
 
-	log.G(ctx).Info("Daemon has completed initialization")
-
-	routerCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	log.G(ctx).Info("Daemon has completed container initialization")
 
 	// Get a the current daemon config, because the daemon sets up config
 	// during initialization. We cannot user the cli.Config for that reason,
@@ -303,7 +309,7 @@ func (cli *daemonCLI) start(ctx context.Context) (err error) {
 	//
 	// FIXME(thaJeztah): better separate runtime and config data?
 	daemonCfg := d.Config()
-	routerOpts, err := newRouterOptions(routerCtx, &daemonCfg, d, c)
+	routerOpts, err := newRouterOptions(ctx, &daemonCfg, d, c)
 	if err != nil {
 		return err
 	}
@@ -316,6 +322,8 @@ func (cli *daemonCLI) start(ctx context.Context) (err error) {
 
 	// after the daemon is done setting up we can notify systemd api
 	notifyReady()
+	log.G(ctx).Info("Daemon is ready to accept requests")
+	span.End()
 
 	// Daemon is fully initialized. Start handling API traffic
 	// and wait for serve API to complete.
@@ -341,6 +349,7 @@ func (cli *daemonCLI) start(ctx context.Context) (err error) {
 			}
 		}(ls)
 	}
+
 	apiWG.Wait()
 	close(errAPI)
 
@@ -361,7 +370,7 @@ func (cli *daemonCLI) start(ctx context.Context) (err error) {
 		return errors.Wrap(err, "shutting down due to ServeAPI error")
 	}
 
-	if err := tp.Shutdown(context.Background()); err != nil {
+	if err := tp.Shutdown(context.WithoutCancel(ctx)); err != nil {
 		log.G(ctx).WithError(err).Error("Failed to shutdown OTEL tracing")
 	}
 
@@ -427,46 +436,73 @@ func newRouterOptions(ctx context.Context, config *config.Config, d *daemon.Daem
 	}
 	cgroupParent := newCgroupParent(config)
 
-	bk, err := buildkit.New(ctx, buildkit.Opt{
-		SessionManager:      sm,
-		Root:                filepath.Join(config.Root, "buildkit"),
-		EngineID:            d.ID(),
-		Dist:                d.DistributionServices(),
-		ImageTagger:         d.ImageService(),
-		NetworkController:   d.NetworkController(),
-		DefaultCgroupParent: cgroupParent,
-		RegistryHosts:       d.RegistryHosts,
-		BuilderConfig:       config.Builder,
-		Rootless:            daemon.Rootless(config),
-		IdentityMapping:     d.IdentityMapping(),
-		DNSConfig:           config.DNSConfig,
-		ApparmorProfile:     daemon.DefaultApparmorProfile(),
-		UseSnapshotter:      d.UsesSnapshotter(),
-		Snapshotter:         d.ImageService().StorageDriver(),
-		ContainerdAddress:   config.ContainerdAddr,
-		ContainerdNamespace: config.ContainerdNamespace,
-		Callbacks: exporter.BuildkitCallbacks{
-			Exported: d.ImageExportedByBuildkit,
-			Named:    d.ImageNamedByBuildkit,
-		},
-	})
-	if err != nil {
-		return routerOptions{}, err
-	}
+	log.G(ctx).Info("Initializing buildkit")
 
-	bb, err := buildbackend.NewBackend(d.ImageService(), manager, bk, d.EventsService)
-	if err != nil {
-		return routerOptions{}, errors.Wrap(err, "failed to create buildmanager")
+	type bkinit struct {
+		bk  *buildkit.Builder
+		err error
 	}
+	ch := make(chan bkinit, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		defer cancel()
+		bk, err := buildkit.New(ctx, buildkit.Opt{
+			SessionManager:      sm,
+			Root:                filepath.Join(config.Root, "buildkit"),
+			EngineID:            d.ID(),
+			Dist:                d.DistributionServices(),
+			ImageTagger:         d.ImageService(),
+			NetworkController:   d.NetworkController(),
+			DefaultCgroupParent: cgroupParent,
+			RegistryHosts:       d.RegistryHosts,
+			BuilderConfig:       config.Builder,
+			Rootless:            daemon.Rootless(config),
+			IdentityMapping:     d.IdentityMapping(),
+			DNSConfig:           config.DNSConfig,
+			ApparmorProfile:     daemon.DefaultApparmorProfile(),
+			UseSnapshotter:      d.UsesSnapshotter(),
+			Snapshotter:         d.ImageService().StorageDriver(),
+			ContainerdAddress:   config.ContainerdAddr,
+			ContainerdNamespace: config.ContainerdNamespace,
+			Callbacks: exporter.BuildkitCallbacks{
+				Exported: d.ImageExportedByBuildkit,
+				Named:    d.ImageNamedByBuildkit,
+			},
+		})
+		ch <- bkinit{bk, err}
+	}()
 
-	return routerOptions{
+	ro := routerOptions{
 		sessionManager: sm,
-		buildBackend:   bb,
 		features:       d.Features,
-		buildkit:       bk,
 		daemon:         d,
 		cluster:        c,
-	}, nil
+	}
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+WaitLoop:
+	for {
+		select {
+		case resp := <-ch:
+			if resp.err != nil {
+				return routerOptions{}, errors.Wrap(resp.err, "error setting up buildkit")
+			}
+			ro.buildkit = resp.bk
+
+			bb, err := buildbackend.NewBackend(d.ImageService(), manager, resp.bk, d.EventsService)
+			if err != nil {
+				return routerOptions{}, errors.Wrap(err, "failed to create buildmanager")
+			}
+			ro.buildBackend = bb
+			break WaitLoop
+		case <-ticker.C:
+			log.G(ctx).Debug("Waiting for buildkit")
+		}
+	}
+
+	return ro, nil
 }
 
 func (cli *daemonCLI) reloadConfig() {

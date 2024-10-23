@@ -26,7 +26,7 @@ import (
 
 const networkName = "bridge"
 
-func newExecutor(root, cgroupParent string, net *libnetwork.Controller, dnsConfig *oci.DNSConfig, rootless bool, idmap idtools.IdentityMapping, apparmorProfile string) (executor.Executor, error) {
+func newExecutor(ctx context.Context, root, cgroupParent string, net *libnetwork.Controller, dnsConfig *oci.DNSConfig, rootless bool, idmap idtools.IdentityMapping, apparmorProfile string) (executor.Executor, error) {
 	netRoot := filepath.Join(root, "net")
 	networkProviders := map[pb.NetMode]network.Provider{
 		pb.NetMode_UNSET: &bridgeProvider{Controller: net, Root: netRoot},
@@ -40,7 +40,7 @@ func newExecutor(root, cgroupParent string, net *libnetwork.Controller, dnsConfi
 		for _, fi := range fis {
 			fp := filepath.Join(netRoot, fi.Name())
 			if err := os.RemoveAll(fp); err != nil {
-				log.G(context.TODO()).WithError(err).Errorf("failed to delete old network state: %v", fp)
+				log.G(ctx).WithError(err).Errorf("failed to delete old network state: %v", fp)
 			}
 		}
 	}
